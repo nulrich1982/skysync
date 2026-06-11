@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skysync"
+version = "0.1.0"
+description = "Two-way household task sync: SharePoint (master) <-> Microsoft To Do <-> Skylight Calendar"
+requires-python = ">=3.11"
+dependencies = [
+    "msal>=1.28,<2",
+    "requests>=2.32,<3",
+    "pydantic>=2.7,<3",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

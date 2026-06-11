@@ -1,0 +1,97 @@
+# =============================================================================
+# SkySync configuration — copy to config.toml and edit.
+#
+# NON-SECRET VALUES ONLY. Secrets (Skylight password/token, optional Graph
+# client secret) are seeded into the DPAPI store:
+#       python -m skysync.secrets set skylight_email
+#       python -m skysync.secrets set skylight_password
+# config.toml is .gitignored; this example file is committed.
+# =============================================================================
+
+[general]
+state_dir = "state"        # ledger db + heartbeat live here (gitignored)
+log_dir = "logs"
+log_level = "INFO"
+
+[heartbeat]
+file = "state/heartbeat.json"
+ping_url = ""              # optional: healthchecks.io-style URL pinged on success
+max_age_minutes = 45       # check-heartbeat.ps1 alerts past this age
+
+[schedule]
+# CONFIG DECISION #2 (cadence). Default: every 15 minutes.
+# Consumed by register-task.ps1 when (re)registering the scheduled task.
+interval_minutes = 15
+
+[graph]
+tenant_id = "YOUR-TENANT-GUID"
+client_id = "YOUR-APP-CLIENT-GUID"
+# SharePoint-leg auth. To Do is ALWAYS delegated (Graph has no app-only To Do
+# CRUD). "delegated" (default) reuses the same signed-in user — one auth flow,
+# no client secret. "app_only" uses client credentials (Sites.ReadWrite.All
+# application permission + admin consent) and requires:
+#       python -m skysync.secrets set graph_client_secret
+# Trade-offs discussed in DESIGN_NOTES.md.
+sharepoint_auth = "delegated"
+
+[sharepoint]
+# Get these via Graph Explorer — see SETUP.md.
+site_id = "contoso.sharepoint.com,11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222"
+list_id = "33333333-3333-3333-3333-333333333333"
+
+[todo]
+# To Do list that receives tasks whose assignee has no per-child mapping.
+default_list = "Tasks"
+
+[skylight]
+frame_id = "1234567"       # from DevTools/HAR capture — see SETUP.md
+chore_window_days_past = 14
+chore_window_days_future = 60
+# Recurring/routine chores are Skylight-native (rendered as instances of an
+# RRULE); they are NOT synced by default and are left alone on the frame.
+sync_recurring = false
+
+[sync]
+# CONFIG DECISION #3 (conflict policy). Default: most-recently-modified wins;
+# the discarded side's content is logged at WARNING.
+conflict_policy = "most_recent_wins"     # or "sharepoint_wins"
+
+# CONFIG DECISION #4 (deletes vs completions). Defaults:
+#   completions propagate in every direction;
+#   a DELETE in To Do removes the Skylight chore (and the SP row);
+#   a DELETE on the Skylight frame does NOT delete To Do/SharePoint — the
+#   chore just detaches (logged), so a kid clearing the frame can't destroy
+#   the family backlog;
+#   a DELETE in SharePoint (the system of record) propagates everywhere.
+completions = "both_ways"
+deletes_todo_to_skylight = true
+deletes_skylight_to_todo = false
+deletes_sharepoint_propagate = true
+
+# CONFIG DECISION #5 (chore stream). Default per-child: each child has their
+# own To Do list and their own Skylight category (family member).
+stream_mode = "per_child"
+
+# =============================================================================
+# CONFIG DECISION #1: list -> child mapping (worked example — replace).
+#
+# For each child:
+#   todo_list         display name of their Microsoft To Do list
+#   skylight_category label of their Skylight category/family member
+#                     (Frame settings -> family members; matched
+#                     case-insensitively, resolved to an id at runtime)
+#   sp_assignee       value used in the SharePoint list's "Assignee" column
+#
+# A task whose assignee can't be mapped still syncs SharePoint <-> To Do
+# (into [todo].default_list) but is skipped for Skylight, with a log line.
+# =============================================================================
+
+[mapping.children.avery]
+todo_list = "Avery's Chores"
+skylight_category = "Avery"
+sp_assignee = "Avery"
+
+[mapping.children.blake]
+todo_list = "Blake's Chores"
+skylight_category = "Blake"
+sp_assignee = "Blake"

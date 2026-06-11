@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git config user.name \"Nathan\")",
+      "PowerShell(git config user.email \"nathan@localhost\")",
+      "PowerShell(git add .gitignore)",
+      "PowerShell(git commit -m \"Add .gitignore excluding all secret material \\(first commit, per security constraint\\)\")",
+      "PowerShell($f = \"src\\\\skysync\\\\skylight\\\\spec\\\\skylight-openapi.yaml\"; Select-String -Path $f -Pattern '^\\\\s{4}\\(get|post|put|patch|delete\\):' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "WebFetch(domain:www.npmjs.com)"
+    ]
+  }
+}
