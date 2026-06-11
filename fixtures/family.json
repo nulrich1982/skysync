@@ -1,0 +1,51 @@
+{
+  "_comment": "Mock-mode fixture: a small household snapshot. All data fake.",
+  "mapped_assignees": {
+    "avery": { "sp": "sp", "todo": "list-avery", "skylight": "cat-avery" },
+    "blake": { "sp": "sp", "todo": "list-blake", "skylight": "cat-blake" }
+  },
+  "sides": {
+    "sp": [
+      {
+        "task": {
+          "title": "Empty the dishwasher",
+          "notes": "Top rack too",
+          "due_date": "2026-06-10",
+          "assignee": "avery",
+          "status": "open"
+        }
+      },
+      {
+        "task": {
+          "title": "Pack swim bag",
+          "notes": "",
+          "due_date": "2026-06-12",
+          "assignee": "blake",
+          "status": "open"
+        }
+      }
+    ],
+    "todo": [
+      {
+        "task": {
+          "title": "Practice piano",
+          "notes": "20 minutes",
+          "due_date": "2026-06-11",
+          "assignee": "avery",
+          "status": "open"
+        }
+      }
+    ],
+    "skylight": [
+      {
+        "task": {
+          "title": "Feed the dog",
+          "notes": "",
+          "due_date": "2026-06-10",
+          "assignee": "blake",
+          "status": "completed"
+        }
+      }
+    ]
+  }
+}

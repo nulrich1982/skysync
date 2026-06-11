@@ -465,18 +465,18 @@ class SyncEngine:
     # -- 7: propagate ---------------------------------------------------------
     def _propagate(self, row: LedgerRow, canonical: CanonicalTask) -> None:
         row = self.ledger.get(row.internal_id) or row
-        # Undated tasks headed for Skylight get today stamped as the due date
-        # (the frame's chore chart is date-based). This intentionally
-        # propagates to all sides — documented policy, not an accident.
+        # Undated tasks that Skylight holds (or should hold) get today stamped
+        # as the due date: the frame's chore chart is date-based, and the
+        # Skylight PUT cannot clear a start date — leaving canonical undated
+        # would replan the same update forever. This intentionally propagates
+        # to all sides — documented policy, not an accident.
         sky = self.clients.get("skylight")
         if (
             self.policy.undated_due_today
             and canonical.due_date is None
-            and canonical.status == "open"
             and sky is not None
             and not row.sky_detached
             and sky.supports(canonical)
-            and row.side_id("skylight") is None
         ):
             canonical = canonical.replace(due_date=self.today())
             self.ledger.set_canonical(row.internal_id, canonical, full_hash(canonical))

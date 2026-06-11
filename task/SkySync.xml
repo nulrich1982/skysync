@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Reference task definition. register-task.ps1 generates and re-exports the
+     live version with your machine's paths and account; this template shows
+     what gets installed. Import manually with:
+       Register-ScheduledTask -TaskName SkySync -Xml (Get-Content task\SkySync.xml -Raw) -User DOMAIN\user -Password ***
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>SkySync: SharePoint (master) &lt;-&gt; Microsoft To Do &lt;-&gt; Skylight Calendar task sync</Description>
+    <URI>\SkySync</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT15M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <!-- Filled in by register-task.ps1; must be the SAME account that
+           seeded the DPAPI secrets. LogonType Password = run whether the
+           user is logged on or not. -->
+      <UserId>DOMAIN\user</UserId>
+      <LogonType>Password</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <WakeToRun>false</WakeToRun>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Python313\python.exe</Command>
+      <Arguments>-m skysync.main --config "D:\path\to\Skylight Sync\config.toml" run --live</Arguments>
+      <WorkingDirectory>D:\path\to\Skylight Sync</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

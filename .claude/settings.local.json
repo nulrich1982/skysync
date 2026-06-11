@@ -6,7 +6,8 @@
       "PowerShell(git add .gitignore)",
       "PowerShell(git commit -m \"Add .gitignore excluding all secret material \\(first commit, per security constraint\\)\")",
       "PowerShell($f = \"src\\\\skysync\\\\skylight\\\\spec\\\\skylight-openapi.yaml\"; Select-String -Path $f -Pattern '^\\\\s{4}\\(get|post|put|patch|delete\\):' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "PowerShell($env:PYTHONPATH=\"src\"; python tools/trace_lifecycle.py)"
     ]
   }
 }

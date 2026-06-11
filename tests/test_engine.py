@@ -528,6 +528,17 @@ def test_undated_task_gets_today_stamped_for_skylight():
     env.assert_converged()
 
 
+def test_clearing_due_date_restamps_instead_of_looping():
+    """Skylight cannot clear a chore's start date; clearing the due date in
+    SP must re-stamp today everywhere, not replan the same write forever."""
+    env, _ = converged_env(due=TODAY + timedelta(days=2))
+    env.sp.user_edit(next(iter(env.sp.items)), due_date=None)
+    env.run()
+    for side in ("sp", "todo", "skylight"):
+        assert next(iter(env.clients[side].items.values())).task.due_date == TODAY, side
+    env.assert_converged()
+
+
 def test_undated_unmapped_task_keeps_no_due_date():
     env = make_env()
     env.sp.seed(task(assignee=None, due=None))
