@@ -161,10 +161,12 @@ class TestTokenResolution:
         assert len(result.data) == 2
         assert len(calls) == 1
 
-    def test_basic_prefix_stripped(self) -> None:
-        """A token that starts with 'Basic ' has the prefix stripped."""
-        api = make_api(token="Basic actual-token-value")
-        assert api._resolve_token() == "actual-token-value"
+    def test_captured_scheme_prefix_kept_verbatim(self) -> None:
+        """A captured header value keeps its scheme; bare tokens get Basic."""
+        assert make_api(token="Basic actual-token")._resolve_auth_header() == "Basic actual-token"
+        assert make_api(token="Bearer some-jwt-ish")._resolve_auth_header() == "Bearer some-jwt-ish"
+        assert make_api(token="bare-token")._resolve_auth_header() == "Basic bare-token"
+        assert make_api(token="  Bearer padded  ")._resolve_auth_header() == "Bearer padded"
 
     def test_session_login_flow(self) -> None:
         """When no skylight_token, POST /sessions is called to get a token."""
@@ -217,11 +219,11 @@ class TestTokenResolution:
         api._session.request = fake_session_request  # type: ignore[method-assign]
         api._session.post = fake_session_post  # type: ignore[method-assign]
 
-        # First call resolves token via login.
-        token1 = api._resolve_token()
-        # Second call should return cached token without re-posting.
-        token2 = api._resolve_token()
-        assert token1 == token2 == "abc123token"
+        # First call resolves the header via login.
+        header1 = api._resolve_auth_header()
+        # Second call should return the cached header without re-posting.
+        header2 = api._resolve_auth_header()
+        assert header1 == header2 == "Basic abc123token"
         assert call_count[0] == 1  # login called exactly once
 
     def test_401_relogin_in_password_mode(self) -> None:
@@ -234,7 +236,7 @@ class TestTokenResolution:
         }[name]
         api = SkylightApi(frame_id="4418006", secrets=secrets, base_url="https://fake")
         api._password_mode = True
-        api._token = "old-token"  # pre-seed so we skip initial login
+        api._auth_header = "Basic old-token"  # pre-seed so we skip initial login
 
         relogin_count = [0]
 
@@ -270,7 +272,7 @@ class TestTokenResolution:
         }[name]
         api = SkylightApi(frame_id="4418006", secrets=secrets, base_url="https://fake")
         api._password_mode = True
-        api._token = "bad-token"
+        api._auth_header = "Basic bad-token"
 
         def fake_session_request(method: str, url: str, **kw: Any) -> FakeResponse:
             # Always 401 regardless of token
@@ -289,9 +291,8 @@ class TestTokenResolution:
     def test_401_token_mode_raises_auth_error(self) -> None:
         """401 in pre-captured-token mode raises AuthError immediately (no relogin)."""
         api = make_api(token="expired-tok")
-        # Token is already resolved by make_api via get_optional.
-        # Force the state: token is set, not password_mode.
-        api._token = "expired-tok"
+        # Force the state: header resolved, not password_mode.
+        api._auth_header = "Basic expired-tok"
         api._password_mode = False
 
         def fake_session_request(method: str, url: str, **kw: Any) -> FakeResponse:

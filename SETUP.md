@@ -76,9 +76,11 @@ display names in `[mapping.children.*].todo_list`.
 3. Filter requests for `frames/` — you'll see calls like
    `https://app.ourskylight.com/api/frames/4418006/chores?...`.
    The number after `/frames/` is your **frameId** → `[skylight].frame_id`.
-4. Recommended: click any `api/...` request → **Headers** → copy the
-   `Authorization: Basic <token>` value for step 4 below. (Saving a HAR and
-   searching it works too.)
+4. Recommended: click any `api/...` request → **Headers** → Request Headers →
+   copy the full `authorization:` value for step 4 below — it will look like
+   `Bearer xyz...` or `Basic xyz...`; copy it **including the scheme word**,
+   SkySync sends it exactly as captured. (Saving a HAR and searching it works
+   too.)
 5. Family members: Frame settings → categories. Each child's **category
    label** goes in `[mapping.children.*].skylight_category`.
 

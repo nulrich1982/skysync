@@ -4,9 +4,11 @@ The Skylight API is REVERSE-ENGINEERED and WILL drift; every response is
 validated against pydantic models and failures raise SchemaDriftError
 immediately (fail loud, never coerce silently).
 
-Auth scheme: the API uses an opaque token sent as ``Authorization: Basic
-<token>`` — despite the header name it is NOT Base64-encoded credentials; the
-token value is sent verbatim. Tokens are obtained via POST /api/sessions.
+Auth scheme: observed in the wild as BOTH ``Authorization: Bearer <token>``
+(browser-captured tokens) and ``Authorization: Basic <token>`` (the opaque
+token returned by POST /api/sessions, sent verbatim — NOT base64 credentials).
+A captured token that includes its scheme prefix is sent exactly as captured;
+a bare token defaults to Basic.
 """
 from __future__ import annotations
 
@@ -56,8 +58,8 @@ class SkylightApi:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._session = requests.Session()
-        # Cached token — resolved lazily on first request.
-        self._token: str | None = None
+        # Cached full Authorization header value — resolved lazily.
+        self._auth_header: str | None = None
         # Whether we authenticated via email+password (vs. pre-captured token).
         self._password_mode: bool = False
 
@@ -65,25 +67,30 @@ class SkylightApi:
     # Auth
     # ------------------------------------------------------------------
 
-    def _resolve_token(self) -> str:
-        """Return (and cache) the auth token, performing login if needed."""
-        if self._token is not None:
-            return self._token
+    def _resolve_auth_header(self) -> str:
+        """Return (and cache) the full Authorization header value, performing
+        login if needed."""
+        if self._auth_header is not None:
+            return self._auth_header
 
         raw = self._secrets.get_optional("skylight_token")
         if raw is not None:
-            # Strip an optional leading "Basic " prefix (e.g. if the user
-            # captured the whole header value instead of just the token).
-            if raw.startswith("Basic "):
-                raw = raw[len("Basic "):]
-            self._token = raw.strip()
+            raw = raw.strip()
+            # A captured header value that already names its scheme ("Bearer
+            # xyz" / "Basic xyz") is sent exactly as captured — both schemes
+            # have been observed in the wild. A bare token defaults to Basic
+            # (the scheme used for session-login tokens).
+            if raw.lower().startswith(("basic ", "bearer ")):
+                self._auth_header = raw
+            else:
+                self._auth_header = f"Basic {raw}"
             self._password_mode = False
-            return self._token
+            return self._auth_header
 
         # Fall back to email + password login.
         self._password_mode = True
-        self._token = self._login()
-        return self._token
+        self._auth_header = f"Basic {self._login()}"
+        return self._auth_header
 
     def _login(self) -> str:
         """POST /sessions and return the token. Raises AuthError on failure."""
@@ -107,7 +114,7 @@ class SkylightApi:
         return self._parse(resp, SessionResponse, "POST /sessions").data.attributes.token
 
     def _invalidate_token(self) -> None:
-        self._token = None
+        self._auth_header = None
 
     # ------------------------------------------------------------------
     # Transport
@@ -129,7 +136,7 @@ class SkylightApi:
         401. We intercept 401 here to handle re-login (password mode) or a clear
         error message (token mode).
         """
-        token = self._resolve_token()
+        auth_header = self._resolve_auth_header()
         url = f"{self._base_url}{path}"
         what = f"{method.upper()} {path}"
 
@@ -137,7 +144,7 @@ class SkylightApi:
             return self._session.request(
                 method,
                 url,
-                headers={"Authorization": f"Basic {token}"},
+                headers={"Authorization": auth_header},
                 json=json,
                 params=params,
                 timeout=self._timeout,
@@ -152,14 +159,14 @@ class SkylightApi:
             if self._password_mode:
                 log.info("%s: got 401, attempting re-login once", what)
                 self._invalidate_token()
-                new_token = self._login()
-                self._token = new_token
+                new_header = f"Basic {self._login()}"
+                self._auth_header = new_header
 
                 def _do2() -> requests.Response:
                     return self._session.request(
                         method,
                         url,
-                        headers={"Authorization": f"Basic {new_token}"},
+                        headers={"Authorization": new_header},
                         json=json,
                         params=params,
                         timeout=self._timeout,
