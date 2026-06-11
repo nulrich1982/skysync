@@ -1,0 +1,49 @@
+# ============================================================
+# SECRETS — nothing below this line may ever be committed.
+# All secret material lives outside git or in DPAPI-encrypted
+# blobs which are ALSO excluded as defense-in-depth.
+# ============================================================
+secrets/
+*.secret
+*.secret.*
+*.bin
+token_cache*
+*.token
+*.pem
+*.pfx
+*.key
+config.toml
+config.local.toml
+.env
+.env.*
+
+# Runtime state (ledger, heartbeat, logs)
+state/
+*.sqlite3
+*.sqlite3-*
+*.db
+heartbeat.json
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
