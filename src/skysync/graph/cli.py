@@ -58,8 +58,10 @@ def _main(argv: list[str] | None = None) -> int:
     cfg = load_config(Path(ns.config))
     store = SecretStore(cfg.resolve("secrets"))
 
+    sp_delegated = cfg.sharepoint is not None and cfg.graph.sharepoint_auth == "delegated"
+
     if ns.command == "todo-dump":
-        auth = DelegatedGraphAuth(cfg.graph, store)
+        auth = DelegatedGraphAuth(cfg.graph, store, include_sharepoint_scope=sp_delegated)
         session = GraphSession(auth.get_token)
 
         child_lists = {
@@ -70,14 +72,21 @@ def _main(argv: list[str] | None = None) -> int:
         tasks = client.list_tasks()
 
     else:  # sp-dump
+        if cfg.sharepoint is None:
+            print(
+                "sp-dump: no [sharepoint] section in config.toml — this deployment "
+                "runs two-way To Do <-> Skylight (the ledger is the system of record).",
+                file=sys.stderr,
+            )
+            return 2
         if cfg.graph.sharepoint_auth == "app_only":
             sp_auth = AppOnlyGraphAuth(cfg.graph, store)
         else:
-            sp_auth = DelegatedGraphAuth(cfg.graph, store)
+            sp_auth = DelegatedGraphAuth(cfg.graph, store, include_sharepoint_scope=True)
         session = GraphSession(sp_auth.get_token)
 
         sp_assignees = {
-            key.lower(): child.sp_assignee
+            key.lower(): child.sp_assignee or key.lower()
             for key, child in cfg.mapping.children.items()
         }
         client = SharePointTaskClient(

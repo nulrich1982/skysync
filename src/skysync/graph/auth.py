@@ -47,19 +47,21 @@ _CACHE_SECRET_NAME = "msal_token_cache"
 class DelegatedGraphAuth:
     """Delegated (user) auth with DPAPI-persisted, rotation-safe token cache."""
 
-    def __init__(self, cfg: GraphConfig, store: SecretStore):
+    def __init__(self, cfg: GraphConfig, store: SecretStore, include_sharepoint_scope: bool = False):
         self._store = store
         self._cache = msal.SerializableTokenCache()
         cached = store.get_optional(_CACHE_SECRET_NAME)
         if cached:
             self._cache.deserialize(cached)
+        # tenant_id "consumers" = personal Microsoft account (the default
+        # two-way deployment); a GUID = work/school tenant.
         self._app = msal.PublicClientApplication(
             cfg.client_id,
             authority=f"https://login.microsoftonline.com/{cfg.tenant_id}",
             token_cache=self._cache,
         )
         self._scopes = list(TODO_SCOPES)
-        if cfg.sharepoint_auth == "delegated":
+        if include_sharepoint_scope:
             self._scopes += SP_DELEGATED_SCOPES
 
     # -- cache persistence (constraint #1: persist ROTATED refresh token) ----

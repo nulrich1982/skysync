@@ -1,10 +1,14 @@
 # =============================================================================
 # SkySync configuration — copy to config.toml and edit.
 #
-# NON-SECRET VALUES ONLY. Secrets (Skylight password/token, optional Graph
-# client secret) are seeded into the DPAPI store:
-#       python -m skysync.secrets set skylight_email
-#       python -m skysync.secrets set skylight_password
+# Default deployment: TWO-WAY sync, Microsoft To Do <-> Skylight Calendar,
+# on a PERSONAL Microsoft account. The local sync ledger is the system of
+# record. (An optional SharePoint master for work/school tenants is supported
+# — see the commented [sharepoint] section at the bottom.)
+#
+# NON-SECRET VALUES ONLY. Secrets (Skylight token/password) are seeded into
+# the DPAPI store:
+#       python -m skysync.secrets set skylight_token
 # config.toml is .gitignored; this example file is committed.
 # =============================================================================
 
@@ -24,20 +28,10 @@ max_age_minutes = 45       # check-heartbeat.ps1 alerts past this age
 interval_minutes = 15
 
 [graph]
-tenant_id = "YOUR-TENANT-GUID"
-client_id = "YOUR-APP-CLIENT-GUID"
-# SharePoint-leg auth. To Do is ALWAYS delegated (Graph has no app-only To Do
-# CRUD). "delegated" (default) reuses the same signed-in user — one auth flow,
-# no client secret. "app_only" uses client credentials (Sites.ReadWrite.All
-# application permission + admin consent) and requires:
-#       python -m skysync.secrets set graph_client_secret
-# Trade-offs discussed in DESIGN_NOTES.md.
-sharepoint_auth = "delegated"
-
-[sharepoint]
-# Get these via Graph Explorer — see SETUP.md.
-site_id = "contoso.sharepoint.com,11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222"
-list_id = "33333333-3333-3333-3333-333333333333"
+# Personal Microsoft account (outlook.com etc.): keep "consumers".
+# Work/school tenant: use the tenant GUID instead.
+tenant_id = "consumers"
+client_id = "YOUR-APP-CLIENT-GUID"   # from the Entra app registration (SETUP.md step 1)
 
 [todo]
 # To Do list that receives tasks whose assignee has no per-child mapping.
@@ -53,20 +47,20 @@ sync_recurring = false
 
 [sync]
 # CONFIG DECISION #3 (conflict policy). Default: most-recently-modified wins;
-# the discarded side's content is logged at WARNING.
-conflict_policy = "most_recent_wins"     # or "sharepoint_wins"
+# the discarded side's content is logged at WARNING. Note: Skylight exposes
+# no timestamps, so in a simultaneous-edit conflict To Do wins.
+conflict_policy = "most_recent_wins"
 
 # CONFIG DECISION #4 (deletes vs completions). Defaults:
 #   completions propagate in every direction;
-#   a DELETE in To Do removes the Skylight chore (and the SP row);
-#   a DELETE on the Skylight frame does NOT delete To Do/SharePoint — the
+#   a DELETE in To Do removes the Skylight chore;
+#   a DELETE on the Skylight frame does NOT delete the To Do task — the
 #   chore just detaches (logged), so a kid clearing the frame can't destroy
-#   the family backlog;
-#   a DELETE in SharePoint (the system of record) propagates everywhere.
+#   the family backlog.
 completions = "both_ways"
 deletes_todo_to_skylight = true
 deletes_skylight_to_todo = false
-deletes_sharepoint_propagate = true
+deletes_sharepoint_propagate = true   # only relevant with a [sharepoint] master
 
 # CONFIG DECISION #5 (chore stream). Default per-child: each child has their
 # own To Do list and their own Skylight category (family member).
@@ -80,18 +74,29 @@ stream_mode = "per_child"
 #   skylight_category label of their Skylight category/family member
 #                     (Frame settings -> family members; matched
 #                     case-insensitively, resolved to an id at runtime)
-#   sp_assignee       value used in the SharePoint list's "Assignee" column
 #
-# A task whose assignee can't be mapped still syncs SharePoint <-> To Do
-# (into [todo].default_list) but is skipped for Skylight, with a log line.
+# A task whose assignee can't be mapped still syncs within To Do (it lands in
+# [todo].default_list) but is skipped for Skylight, with a log line.
 # =============================================================================
 
 [mapping.children.avery]
 todo_list = "Avery's Chores"
 skylight_category = "Avery"
-sp_assignee = "Avery"
 
 [mapping.children.blake]
 todo_list = "Blake's Chores"
 skylight_category = "Blake"
-sp_assignee = "Blake"
+
+# =============================================================================
+# OPTIONAL three-way mode: a SharePoint list as the system of record
+# (work/school tenants only — personal accounts have no SharePoint).
+# Uncomment, set [graph].tenant_id to your tenant GUID, add delegated scope
+# Sites.ReadWrite.All to the app registration, and add an sp_assignee to each
+# child mapping. See SETUP.md appendix.
+#
+# [sharepoint]
+# site_id = "contoso.sharepoint.com,1111...,2222..."
+# list_id = "3333..."
+#
+# (per child:)  sp_assignee = "Avery"
+# =============================================================================

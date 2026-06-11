@@ -2,6 +2,21 @@
 
 Decisions, justifications, and known edges. Companion to `SETUP.md`.
 
+## June 2026 revision: SharePoint master dropped (owner decision)
+
+The original brief made a SharePoint list the system of record. The owner
+keeps personal and work (markwellsvcs) domains separate, and personal
+Microsoft accounts have no SharePoint — so the deployed configuration is
+**two-way To Do ⇄ Skylight with the local SQLite ledger as the system of
+record**. The engine was already side-generic; the SharePoint adapter remains
+in the codebase and re-activates by adding a `[sharepoint]` config section
+(see SETUP.md appendix). Consequences in two-way mode:
+* auth needs only `Tasks.ReadWrite` on the `consumers` authority;
+* in simultaneous-edit conflicts, To Do (timestamped) beats Skylight
+  (timestampless), and `sharepoint_wins` degrades to most-recent-wins;
+* the ledger file (`state/ledger.sqlite3`) is the durable record — keep
+  `state_dir` out of OneDrive sync and back it up if you care about history.
+
 ## Architecture in one paragraph
 
 Three *side adapters* (SharePoint, To Do, Skylight) implement one `TaskClient`

@@ -35,10 +35,12 @@ class ScheduleConfig(BaseModel):
 
 
 class GraphConfig(BaseModel):
+    # "consumers" for a personal Microsoft account (the default deployment),
+    # a tenant GUID for a work/school account.
     tenant_id: str
     client_id: str
-    # SharePoint leg auth. To Do is ALWAYS delegated (Graph does not support
-    # app-only for To Do task CRUD) regardless of this setting.
+    # SharePoint leg auth — only relevant when [sharepoint] is configured.
+    # To Do is ALWAYS delegated (Graph does not support app-only To Do CRUD).
     sharepoint_auth: Literal["delegated", "app_only"] = "delegated"
 
     @field_validator("tenant_id", "client_id")
@@ -77,7 +79,7 @@ class SyncConfig(BaseModel):
 class ChildMapping(BaseModel):
     todo_list: str
     skylight_category: str
-    sp_assignee: str
+    sp_assignee: str | None = None  # only used when [sharepoint] is configured
 
 
 class MappingConfig(BaseModel):
@@ -89,7 +91,9 @@ class AppConfig(BaseModel):
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     graph: GraphConfig
-    sharepoint: SharePointConfig
+    # Optional: omit the [sharepoint] section entirely for two-way
+    # To Do <-> Skylight sync (the ledger is the system of record).
+    sharepoint: SharePointConfig | None = None
     todo: TodoConfig = Field(default_factory=TodoConfig)
     skylight: SkylightConfig
     sync: SyncConfig = Field(default_factory=SyncConfig)

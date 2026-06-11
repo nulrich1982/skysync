@@ -1,17 +1,18 @@
 # SkySync
 
-Self-hosted two-way task sync for a household:
+Self-hosted two-way task sync for a household, on a personal Microsoft account:
 
 ```
-        SharePoint list  (system of record)
-              ▲  ▼
    Microsoft To Do  ⇄  Skylight Calendar
    (Graph, delegated)   (unofficial API)
+          └── local sync ledger = system of record ──┘
 ```
 
-A task created/edited/completed/deleted in any source propagates to the
-others — assigned to the right family member on the Skylight frame — with no
+A task created/edited/completed/deleted in either source propagates to the
+other — assigned to the right family member on the Skylight frame — with no
 duplicates and no sync loops, driven by Windows Task Scheduler every 15 min.
+(An optional SharePoint-list master for work/school tenants is supported; see
+the SETUP.md appendix.)
 
 > ⚠️ The Skylight API is **unofficial**: it may break without notice and its
 > use may conflict with Skylight's Terms of Service. See `SETUP.md`.

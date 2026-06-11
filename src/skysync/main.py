@@ -60,12 +60,12 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     from .skylight.client import SkylightApi
 
     store = SecretStore(cfg.resolve("secrets"))
-    delegated = DelegatedGraphAuth(cfg.graph, store)
+    delegated = DelegatedGraphAuth(
+        cfg.graph,
+        store,
+        include_sharepoint_scope=sharepoint_delegated(cfg),
+    )
     todo_session = GraphSession(delegated.get_token)
-    if cfg.graph.sharepoint_auth == "app_only":
-        sp_session = GraphSession(AppOnlyGraphAuth(cfg.graph, store).get_token)
-    else:
-        sp_session = todo_session
 
     children = {k.lower(): v for k, v in cfg.mapping.children.items()}
     todo = TodoTaskClient(
@@ -73,12 +73,18 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
         child_lists={k: v.todo_list for k, v in children.items()},
         default_list=cfg.todo.default_list,
     )
-    sp = SharePointTaskClient(
-        sp_session,
-        site_id=cfg.sharepoint.site_id,
-        list_id=cfg.sharepoint.list_id,
-        sp_assignees={k: v.sp_assignee for k, v in children.items()},
-    )
+    sp = None
+    if cfg.sharepoint is not None:
+        if cfg.graph.sharepoint_auth == "app_only":
+            sp_session = GraphSession(AppOnlyGraphAuth(cfg.graph, store).get_token)
+        else:
+            sp_session = todo_session
+        sp = SharePointTaskClient(
+            sp_session,
+            site_id=cfg.sharepoint.site_id,
+            list_id=cfg.sharepoint.list_id,
+            sp_assignees={k: v.sp_assignee or k for k, v in children.items()},
+        )
     sky_api = SkylightApi(cfg.skylight.frame_id, store)
     sky = SkylightTaskClient(
         sky_api,
@@ -87,7 +93,16 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
         window_future_days=cfg.skylight.chore_window_days_future,
         sync_recurring=cfg.skylight.sync_recurring,
     )
-    return {"sp": sp, "todo": todo, "skylight": sky}
+    clients: dict[Side, TaskClient] = {"todo": todo, "skylight": sky}
+    if sp is not None:
+        clients["sp"] = sp
+    else:
+        log.info("no [sharepoint] configured: two-way To Do <-> Skylight mode (ledger is the system of record)")
+    return clients
+
+
+def sharepoint_delegated(cfg: AppConfig) -> bool:
+    return cfg.sharepoint is not None and cfg.graph.sharepoint_auth == "delegated"
 
 
 # -------------------------------------------------------------- run lock ----
@@ -133,7 +148,11 @@ def cmd_login(cfg: AppConfig) -> int:
     from .graph.auth import DelegatedGraphAuth
     from .secrets import SecretStore
 
-    auth = DelegatedGraphAuth(cfg.graph, SecretStore(cfg.resolve("secrets")))
+    auth = DelegatedGraphAuth(
+        cfg.graph,
+        SecretStore(cfg.resolve("secrets")),
+        include_sharepoint_scope=sharepoint_delegated(cfg),
+    )
     user = auth.login_device_flow()
     print(f"Logged in as {user}. The refresh token is cached (DPAPI) and will rotate on every run.")
     return 0

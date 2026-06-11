@@ -1,15 +1,20 @@
 # SkySync — Setup
 
 Two-way household task sync, self-hosted on an always-on Windows machine:
-**SharePoint list (system of record) ⇄ Microsoft To Do ⇄ Skylight Calendar.**
+
+**Microsoft To Do ⇄ Skylight Calendar** (personal Microsoft account).
+
+The local sync ledger is the system of record — there is no cloud master to
+maintain. (A SharePoint master for work/school tenants is supported as an
+option; see the appendix.)
 
 > ## ⚠️ Risk note — read this first
 > The Skylight Calendar API is **unofficial and reverse-engineered**. It is not
 > documented, not supported, **may break without notice**, and using it **may
 > conflict with Skylight's Terms of Service**. SkySync validates every Skylight
 > response and fails loudly when the API drifts, but you accept the breakage
-> risk (and the ToS question) by running this. The Microsoft Graph legs are
-> fully supported APIs.
+> risk (and the ToS question) by running this. The Microsoft Graph leg is a
+> fully supported API.
 
 ---
 
@@ -17,12 +22,10 @@ Two-way household task sync, self-hosted on an always-on Windows machine:
 
 | # | Item | Where it goes |
 |---|------|---------------|
-| 1 | Azure **tenant ID** | `config.toml` → `[graph].tenant_id` |
-| 2 | Azure app **client ID** | `config.toml` → `[graph].client_id` |
-| 3 | SharePoint **site ID** + **list ID** | `config.toml` → `[sharepoint]` |
-| 4 | Skylight **email** (+ password, or a captured token) | DPAPI secret store |
-| 5 | Skylight **frameId** | `config.toml` → `[skylight].frame_id` |
-| 6 | To Do list names + Skylight category labels per child | `config.toml` → `[mapping.children.*]` |
+| 1 | Entra app **client ID** (personal-account app registration) | `config.toml` → `[graph].client_id` |
+| 2 | Skylight **token** (or email + password) | DPAPI secret store |
+| 3 | Skylight **frameId** | `config.toml` → `[skylight].frame_id` |
+| 4 | To Do list names + Skylight category labels per child | `config.toml` → `[mapping.children.*]` |
 
 ## 0. Prerequisites
 
@@ -36,75 +39,50 @@ Two-way household task sync, self-hosted on an always-on Windows machine:
 > `[general].state_dir` and `log_dir` at a non-synced local path (e.g.
 > `C:\ProgramData\SkySync\state`) — sync engines and SQLite don't mix well.
 
-## 1. Azure app registration (Graph)
+## 1. Entra app registration (personal Microsoft account)
 
-1. [entra.microsoft.com](https://entra.microsoft.com) → **App registrations → New registration**.
-   * Name: `SkySync`; supported accounts: *single tenant* is fine.
-   * **No redirect URI is needed** — SkySync uses the **device-code flow**.
-2. **Authentication** → *Allow public client flows* → **Yes** (required for device code).
-3. **API permissions** → add **Delegated**:
-   * `Tasks.ReadWrite` (Microsoft To Do)
-   * `Sites.ReadWrite.All` (SharePoint leg, delegated default)
-   * (`offline_access` is requested automatically by MSAL at sign-in.)
-4. **Admin consent**: on a work/school tenant, `Sites.ReadWrite.All` (and possibly
-   everything) needs an admin to press **Grant admin consent**. On your own
-   tenant you are that admin.
-5. Copy the **Directory (tenant) ID** and **Application (client) ID** into
-   `config.toml`.
+You register the app while signed in with your **personal** Microsoft account
+(this creates/uses your account's default directory — no work tenant involved).
 
-**Optional app-only SharePoint leg** (`[graph].sharepoint_auth = "app_only"`):
-also add **Application** permission `Sites.ReadWrite.All`, grant admin consent,
-create a **client secret**, and seed it:
-`python -m skysync.secrets set graph_client_secret`. To Do **always** stays
-delegated — Graph does not support app-only To Do access. Trade-offs in
-`DESIGN_NOTES.md`.
+1. Go to [entra.microsoft.com](https://entra.microsoft.com), signing in with
+   the personal account that owns the family's To Do lists → **App
+   registrations → New registration**.
+   * Name: `SkySync`.
+   * **Supported account types: "Personal Microsoft accounts only"** (or "…and
+     personal Microsoft accounts" — it must include personal).
+   * Leave the redirect URI **empty** — SkySync uses the device-code flow.
+2. **Authentication** → *Advanced settings* → **Allow public client flows =
+   Yes** → Save. (Required for device-code login.)
+3. **API permissions** → Add a permission → Microsoft Graph → **Delegated** →
+   `Tasks.ReadWrite`. (That's the only one. `offline_access` is requested
+   automatically at sign-in; no admin consent exists or is needed for
+   personal accounts.)
+4. From **Overview**, copy the **Application (client) ID** into
+   `config.toml` → `[graph].client_id`, and leave
+   `[graph].tenant_id = "consumers"` (that's the personal-accounts authority,
+   not a placeholder).
 
-## 2. SharePoint list
+## 2. Microsoft To Do lists
 
-Create a list on the site of your choice with these columns (internal names
-must match exactly):
+In the To Do app/site signed in as that same personal account, create one
+list per child (e.g. *Avery's Chores*) and keep the built-in *Tasks* list —
+it's the catch-all for unmapped assignees (`[todo].default_list`). Put the
+display names in `[mapping.children.*].todo_list`.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `Title` | built-in | task title |
-| `Notes` | multiple lines (plain text) | |
-| `DueDate` | date | date-only |
-| `Assignee` | single line of text | matches `sp_assignee` in config |
-| `Status` | choice: `open`, `completed` | default `open` |
-| `InternalId` | single line of text | **SkySync's marker — don't touch** |
-
-> Create columns from list settings so the *internal* name matches (create as
-> `Notes`, `DueDate`, etc. directly — renaming later keeps the old internal name).
-
-Get the IDs (sign into [Graph Explorer](https://aka.ms/ge)):
-
-```
-GET https://graph.microsoft.com/v1.0/sites/{hostname}:/sites/{sitePath}?$select=id
-GET https://graph.microsoft.com/v1.0/sites/{site-id}/lists?$select=id,displayName
-```
-
-Put `site_id` (the full `host,guid,guid` string) and `list_id` in `config.toml`.
-
-## 3. Microsoft To Do lists
-
-Create one list per child in To Do (e.g. *Avery's Chores*) plus keep the
-default *Tasks* list (catch-all for unmapped assignees). Put the display names
-in `[mapping.children.*].todo_list` and `[todo].default_list`.
-
-## 4. Skylight frameId (DevTools/HAR capture)
+## 3. Skylight frameId + token (DevTools/HAR capture)
 
 1. Sign in at **app.ourskylight.com** in a desktop browser.
 2. Open DevTools (F12) → **Network** tab → reload.
 3. Filter requests for `frames/` — you'll see calls like
    `https://app.ourskylight.com/api/frames/4418006/chores?...`.
    The number after `/frames/` is your **frameId** → `[skylight].frame_id`.
-4. While you're there (optional, more robust than password auth): click any
-   `api/...` request → **Headers** → copy the `Authorization: Basic <token>`
-   value for step 5. (Saving a HAR and searching it works too.)
+4. Recommended: click any `api/...` request → **Headers** → copy the
+   `Authorization: Basic <token>` value for step 4 below. (Saving a HAR and
+   searching it works too.)
 5. Family members: Frame settings → categories. Each child's **category
    label** goes in `[mapping.children.*].skylight_category`.
 
-## 5. Seed secrets (DPAPI)
+## 4. Seed secrets (DPAPI)
 
 Secrets are encrypted with Windows DPAPI for the **current user** and stored
 as `secrets\*.bin` (gitignored; useless on any other machine/account).
@@ -112,47 +90,50 @@ as `secrets\*.bin` (gitignored; useless on any other machine/account).
 **Do this logged in as the account the scheduled task will run as.**
 
 ```powershell
-# password mode (SkySync logs in via POST /api/sessions):
-python -m skysync.secrets set skylight_email
-python -m skysync.secrets set skylight_password
-
-# OR token mode (paste the captured Authorization value; preferred):
+# token mode (paste the captured Authorization value; preferred):
 python -m skysync.secrets set skylight_token
 
-# only if sharepoint_auth = "app_only":
-python -m skysync.secrets set graph_client_secret
+# OR password mode (SkySync logs in via POST /api/sessions):
+python -m skysync.secrets set skylight_email
+python -m skysync.secrets set skylight_password
 
 python -m skysync.secrets list
 python -m skysync.secrets check skylight_token   # decrypts, prints length only
 ```
 
-## 6. First-run Graph auth (device code)
+## 5. First-run Graph auth (device code)
 
 ```powershell
 python -m skysync.main --config config.toml login
 ```
 
-Follow the printed instructions (open the URL, enter the code, sign in as the
-Microsoft account that owns the To Do lists and can edit the SharePoint list).
-The token cache — including the refresh token, which **rotates on every
-subsequent run** — is stored DPAPI-encrypted. You should never need to log in
-again unless the refresh token is revoked or expires from long disuse.
+Follow the printed instructions (open the URL, enter the code, sign in with
+the **personal** account that owns the To Do lists). The token cache —
+including the refresh token, which **rotates on every subsequent run** — is
+stored DPAPI-encrypted. You should never need to log in again unless the
+refresh token is revoked or expires from long disuse.
 
-## 7. Smoke tests
+## 6. Smoke tests
 
 ```powershell
 python -m skysync.main --config config.toml run --mock      # offline fixtures
 python -m skysync.graph.cli --config config.toml todo-dump  # live To Do read
-python -m skysync.graph.cli --config config.toml sp-dump    # live SP read
 python -m skysync.skylight.cli --config config.toml dump    # live Skylight read
-python -m skysync.main --config config.toml run --dry-run   # plans, no writes
-python -m skysync.main --config config.toml run --live      # first real sync
+python -m skysync.main --config config.toml run --dry-run   # plans writes, executes none
+```
+
+Review the dry-run's `planned_writes` — it should list exactly the creates
+you expect. If it looks right:
+
+```powershell
+python -m skysync.main --config config.toml run --live
 python -m skysync.main --config config.toml status
 ```
 
-Review the dry-run's `planned_writes` before going live.
+Then check the Skylight frame — your To Do tasks should appear under the
+right kids.
 
-## 8. Task Scheduler install (runs whether logged on or not)
+## 7. Task Scheduler install (runs whether logged on or not)
 
 From an **elevated** PowerShell, as the secret-seeding account:
 
@@ -168,7 +149,7 @@ ignores overlapping starts, and exports `task\SkySync.xml`.
 DPAPI gotcha: if runs fail with `CryptUnprotectData failed`, the task is
 running as a different account than the one that seeded the secrets.
 
-## 9. Monitoring (dead-man's switch)
+## 8. Monitoring (dead-man's switch)
 
 * `state\heartbeat.json` is rewritten **only after successful live runs**.
 * `.\check-heartbeat.ps1 [-Popup]` exits non-zero when the heartbeat is older
@@ -181,9 +162,26 @@ running as a different account than the one that seeded the secrets.
 
 | Symptom | Cause / fix |
 |---|---|
-| `AuthError: no cached account` | Run step 6 (`login`). |
+| `AuthError: no cached account` | Run step 5 (`login`). |
 | `AuthError: silent token acquisition failed` | Refresh token expired/revoked — run `login` again. |
 | `CryptUnprotectData failed` | Secrets seeded by a different Windows account — re-seed as the task account. |
 | `SchemaDriftError: ...` | The unofficial Skylight API changed. Re-capture a HAR, compare with `src/skysync/skylight/spec/`, update models/client. |
 | `another run appears active` | Previous run still going (or crashed <60 min ago); the lock self-heals when stale. |
 | Chores missing on the frame | Assignee not mapped to a Skylight category — check `[mapping.children]` and the log line naming the skipped task. |
+| Tasks deleted on the frame come back? | They don't — frame deletes *detach* (by design). Tasks deleted in **To Do** remove the chore. |
+
+---
+
+## Appendix: optional SharePoint master (work/school tenants)
+
+The codebase still supports a three-way mode with a SharePoint list as the
+system of record. Requirements beyond the steps above: a Microsoft 365
+work/school tenant; `[graph].tenant_id` set to the tenant GUID; delegated
+`Sites.ReadWrite.All` added to the app registration (admin consent on work
+tenants); the `[sharepoint]` section uncommented with site/list IDs (get them
+via Graph Explorer: `GET /sites/{hostname}:/sites/{path}?$select=id`, then
+`GET /sites/{site-id}/lists`); an `sp_assignee` per child mapping; and a list
+with columns `Title, Notes(text), DueDate(date), Assignee(text),
+Status(choice: open/completed), InternalId(text)` — internal names exact.
+App-only auth for the SharePoint leg is available via
+`[graph].sharepoint_auth = "app_only"` plus a seeded `graph_client_secret`.

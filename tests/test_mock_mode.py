@@ -12,12 +12,8 @@ REPO = Path(__file__).resolve().parents[1]
 
 CONFIG = """
 [graph]
-tenant_id = "11111111-1111-1111-1111-111111111111"
+tenant_id = "consumers"
 client_id = "22222222-2222-2222-2222-222222222222"
-
-[sharepoint]
-site_id = "example.sharepoint.com,aaa,bbb"
-list_id = "ccc"
 
 [skylight]
 frame_id = "1234567"
@@ -47,10 +43,10 @@ def test_mock_run_succeeds_and_is_idempotent(tmp_path, capsys):
     cfg = make_project(tmp_path)
     assert main(["--config", str(cfg), "run", "--mock"]) == 0
     first = json.loads(capsys.readouterr().out)
-    # 4 fixture tasks discovered across the three sides
-    assert first["counts"]["seen_sp"] == 2
-    assert first["counts"]["new_from_sp"] == 2
-    assert first["counts"]["new_from_todo"] == 1
+    # 4 fixture tasks across the two sides; no sp side configured at all
+    assert "seen_sp" not in first["counts"]
+    assert first["counts"]["seen_todo"] == 3
+    assert first["counts"]["new_from_todo"] == 3
     assert first["counts"]["new_from_skylight"] == 1
     assert (tmp_path / "state" / "ledger-mock.sqlite3").exists()
 

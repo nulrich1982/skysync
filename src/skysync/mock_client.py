@@ -220,7 +220,10 @@ def load_fixture_clients(fixture_path: str | Path) -> dict[Side, InMemoryTaskCli
     raw = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
     mapped = raw.get("mapped_assignees", {})
     clients: dict[Side, InMemoryTaskClient] = {}
-    for side in ("sp", "todo", "skylight"):
+    # Only the sides present in the fixture take part — a fixture without an
+    # "sp" key exercises two-way To Do <-> Skylight mode.
+    sides = [s for s in ("sp", "todo", "skylight") if s in raw.get("sides", {})]
+    for side in sides or ("sp", "todo", "skylight"):
         per_side = {k: v.get(side, f"{side}-container-{k}") for k, v in mapped.items()}
         client = InMemoryTaskClient(side, mapped_assignees=per_side)  # type: ignore[arg-type]
         for entry in raw.get("sides", {}).get(side, []):

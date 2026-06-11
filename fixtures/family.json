@@ -1,11 +1,11 @@
 {
-  "_comment": "Mock-mode fixture: a small household snapshot. All data fake.",
+  "_comment": "Mock-mode fixture: two-way To Do <-> Skylight household snapshot. All data fake. Add an 'sp' side to exercise three-way mode.",
   "mapped_assignees": {
-    "avery": { "sp": "sp", "todo": "list-avery", "skylight": "cat-avery" },
-    "blake": { "sp": "sp", "todo": "list-blake", "skylight": "cat-blake" }
+    "avery": { "todo": "list-avery", "skylight": "cat-avery" },
+    "blake": { "todo": "list-blake", "skylight": "cat-blake" }
   },
   "sides": {
-    "sp": [
+    "todo": [
       {
         "task": {
           "title": "Empty the dishwasher",
@@ -23,9 +23,7 @@
           "assignee": "blake",
           "status": "open"
         }
-      }
-    ],
-    "todo": [
+      },
       {
         "task": {
           "title": "Practice piano",
