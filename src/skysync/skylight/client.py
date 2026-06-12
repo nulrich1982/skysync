@@ -58,6 +58,20 @@ class SkylightApi:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._session = requests.Session()
+        # Cloudflare fronts the API and 403-blocks the default python-requests
+        # User-Agent; present browser-like headers (same as the web app).
+        self._session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin": "https://app.ourskylight.com",
+                "Referer": "https://app.ourskylight.com/",
+            }
+        )
         # Cached full Authorization header value — resolved lazily.
         self._auth_header: str | None = None
         # Whether we authenticated via email+password (vs. pre-captured token).

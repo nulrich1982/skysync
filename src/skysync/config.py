@@ -67,6 +67,17 @@ class SkylightConfig(BaseModel):
     sync_recurring: bool = False  # recurring/routine chores are Skylight-native
 
 
+class GroceryConfig(BaseModel):
+    """Second sync pairing: a Skylight LIST mirrored to a To Do list."""
+
+    enabled: bool = False
+    skylight_list: str = "Grocery List"  # label of the list on the frame
+    todo_list: str = "Grocery List"  # display name of the To Do list
+    # Groceries are ephemeral; by default deletes mirror in BOTH directions
+    # (clearing the frame's list clears To Do, and vice versa).
+    mirror_deletes: bool = True
+
+
 class SyncConfig(BaseModel):
     conflict_policy: Literal["most_recent_wins", "sharepoint_wins"] = "most_recent_wins"
     completions: Literal["both_ways"] = "both_ways"
@@ -95,6 +106,7 @@ class AppConfig(BaseModel):
     # To Do <-> Skylight sync (the ledger is the system of record).
     sharepoint: SharePointConfig | None = None
     todo: TodoConfig = Field(default_factory=TodoConfig)
+    grocery: GroceryConfig = Field(default_factory=GroceryConfig)
     skylight: SkylightConfig
     sync: SyncConfig = Field(default_factory=SyncConfig)
     mapping: MappingConfig = Field(default_factory=MappingConfig)

@@ -37,6 +37,16 @@ client_id = "YOUR-APP-CLIENT-GUID"   # from the Entra app registration (SETUP.md
 # To Do list that receives tasks whose assignee has no per-child mapping.
 default_list = "Tasks"
 
+[grocery]
+# Optional second pairing: mirror a Skylight LIST (e.g. the grocery list) to
+# a Microsoft To Do list. Items are dateless; checking off syncs as
+# completion; with mirror_deletes, clearing an item on either side clears it
+# on the other. Runs with its own ledger (state/ledger-grocery.sqlite3).
+enabled = false
+skylight_list = "Grocery List"   # label of the list on the frame
+todo_list = "Grocery List"       # display name of the To Do list
+mirror_deletes = true
+
 [skylight]
 frame_id = "1234567"       # from DevTools/HAR capture — see SETUP.md
 chore_window_days_past = 14

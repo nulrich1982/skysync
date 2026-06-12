@@ -29,6 +29,20 @@ conflict resolution, delete policies, and propagation operate on canonical
 state, with SharePoint ordered first as the system of record. All writes are
 journaled in the ledger (`pending_ops`) before execution.
 
+## June 2026 addition: grocery-list pairing
+
+A second engine instance mirrors one Skylight LIST (default "Grocery List")
+to one To Do list, with its own ledger (`state/ledger-grocery.sqlite3`) and
+its own policy: no due-date stamping (groceries are dateless), deletes mirror
+both ways by default (`[grocery].mirror_deletes`), and — unlike windowed
+chores — list items are fetched in full, so absence IS authoritative
+(`SyncPolicy.sky_absence_trusted`). Adapter:
+[list_adapter.py](src/skysync/skylight/list_adapter.py); projection is
+title+status only. Also: Cloudflare fronts the Skylight API and 403-blocks
+non-browser-looking requests; the client presents browser-like headers, and
+captured Authorization values are sent verbatim with whichever scheme
+(`Bearer`/`Basic`) was captured.
+
 ## Constraint-driven decisions
 
 ### 1. To Do leg: delegated MSAL only

@@ -50,6 +50,16 @@ def build_policy(cfg: AppConfig) -> SyncPolicy:
     )
 
 
+def grocery_policy(cfg: AppConfig) -> SyncPolicy:
+    return SyncPolicy(
+        conflict_policy=cfg.sync.conflict_policy,
+        deletes_todo_to_skylight=cfg.grocery.mirror_deletes,
+        deletes_skylight_to_todo=cfg.grocery.mirror_deletes,
+        undated_due_today=False,  # groceries are dateless; never stamp dates
+        sky_absence_trusted=True,  # list items are fetched unwindowed
+    )
+
+
 def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     # Imported lazily so --mock works without msal/requests reachability.
     from .graph.auth import AppOnlyGraphAuth, DelegatedGraphAuth, GraphSession
@@ -99,6 +109,24 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     else:
         log.info("no [sharepoint] configured: two-way To Do <-> Skylight mode (ledger is the system of record)")
     return clients
+
+
+def build_grocery_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
+    """Second pairing: one Skylight LIST mirrored to one To Do list. Reuses
+    the same auth (separate client instances, separate ledger)."""
+    from .graph.auth import DelegatedGraphAuth, GraphSession
+    from .graph.todo_client import TodoTaskClient
+    from .secrets import SecretStore
+    from .skylight.client import SkylightApi
+    from .skylight.list_adapter import SkylightListTaskClient
+
+    store = SecretStore(cfg.resolve("secrets"))
+    session = GraphSession(
+        DelegatedGraphAuth(cfg.graph, store, include_sharepoint_scope=sharepoint_delegated(cfg)).get_token
+    )
+    todo = TodoTaskClient(session, child_lists={}, default_list=cfg.grocery.todo_list)
+    sky = SkylightListTaskClient(SkylightApi(cfg.skylight.frame_id, store), cfg.grocery.skylight_list)
+    return {"todo": todo, "skylight": sky}
 
 
 def sharepoint_delegated(cfg: AppConfig) -> bool:
@@ -162,44 +190,63 @@ def cmd_run(cfg: AppConfig, mode: str, fixture: str | None) -> int:
     state_dir = cfg.resolve(cfg.general.state_dir)
     started = time.monotonic()
 
+    grocery_clients: dict[Side, TaskClient] | None = None
+    grocery_ledger: Ledger | None = None
+
     if mode == "mock":
         from .mock_client import load_fixture_clients
 
         fixture_path = cfg.resolve(fixture or DEFAULT_FIXTURE)
         clients: dict[Side, TaskClient] = load_fixture_clients(fixture_path)  # type: ignore[assignment]
         ledger = Ledger(state_dir / "ledger-mock.sqlite3")
-        log.info("MOCK run from fixture %s (ledger-mock.sqlite3)", fixture_path)
+        log.info("MOCK run from fixture %s (ledger-mock.sqlite3; grocery pairing skipped)", fixture_path)
     elif mode == "dry-run":
-        clients = build_live_clients(cfg)
         from .dryrun import DryRunClient
 
-        clients = {side: DryRunClient(c) for side, c in clients.items()}  # type: ignore[misc]
+        clients = {side: DryRunClient(c) for side, c in build_live_clients(cfg).items()}  # type: ignore[misc]
+        tmpdir = Path(tempfile.mkdtemp(prefix="skysync-dryrun-"))
         real = state_dir / "ledger.sqlite3"
-        tmp = Path(tempfile.mkdtemp(prefix="skysync-dryrun-")) / "ledger.sqlite3"
         if real.exists():
-            shutil.copy2(real, tmp)
-        ledger = Ledger(tmp)
-        log.info("DRY-RUN against a throwaway ledger copy (%s)", tmp)
+            shutil.copy2(real, tmpdir / "ledger.sqlite3")
+        ledger = Ledger(tmpdir / "ledger.sqlite3")
+        if cfg.grocery.enabled:
+            grocery_clients = {side: DryRunClient(c) for side, c in build_grocery_clients(cfg).items()}  # type: ignore[misc]
+            real_g = state_dir / "ledger-grocery.sqlite3"
+            if real_g.exists():
+                shutil.copy2(real_g, tmpdir / "ledger-grocery.sqlite3")
+            grocery_ledger = Ledger(tmpdir / "ledger-grocery.sqlite3")
+        log.info("DRY-RUN against throwaway ledger copies (%s)", tmpdir)
     else:  # live
         clients = build_live_clients(cfg)
         ledger = Ledger(state_dir / "ledger.sqlite3")
+        if cfg.grocery.enabled:
+            grocery_clients = build_grocery_clients(cfg)
+            grocery_ledger = Ledger(state_dir / "ledger-grocery.sqlite3")
 
+    grocery_report: RunReport | None = None
     try:
         with RunLock(state_dir):
             engine = SyncEngine(ledger, clients, build_policy(cfg))
             report: RunReport = engine.run()
+            if grocery_clients is not None and grocery_ledger is not None:
+                grocery_report = SyncEngine(grocery_ledger, grocery_clients, grocery_policy(cfg)).run()
     finally:
         ledger.close()
+        if grocery_ledger is not None:
+            grocery_ledger.close()
 
     duration = round(time.monotonic() - started, 1)
     summary = {"mode": mode, "duration_s": duration, **report.summary()}
+    if grocery_report is not None:
+        summary["grocery"] = grocery_report.summary()
     log.info("run complete: %s", json.dumps(summary, default=str))
 
     if mode == "live":
         heartbeat.write_heartbeat(cfg.resolve(cfg.heartbeat.file), summary)
         heartbeat.ping(cfg.heartbeat.ping_url)
     if mode == "dry-run":
-        planned = [p for c in clients.values() for p in getattr(c, "planned", [])]
+        all_clients = list(clients.values()) + list((grocery_clients or {}).values())
+        planned = [p for c in all_clients for p in getattr(c, "planned", [])]
         print(json.dumps({"planned_writes": planned, **summary}, indent=2, default=str))
     if mode == "mock":
         print(json.dumps(summary, indent=2, default=str))

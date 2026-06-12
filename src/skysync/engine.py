@@ -64,6 +64,10 @@ class SyncPolicy:
     undated_due_today: bool = True
     sky_window_past_days: int = 14
     sky_window_future_days: int = 60
+    # Chores are fetched in a date window, so absence outside it proves
+    # nothing. List items (grocery sync) are fetched unwindowed — there,
+    # absence IS a delete and this flag makes the engine trust it.
+    sky_absence_trusted: bool = False
 
 
 @dataclass
@@ -353,7 +357,7 @@ class SyncEngine:
             if side == "skylight":
                 if row.sky_detached:
                     continue
-                if not self._sky_visible(canonical):
+                if not (p.sky_absence_trusted or self._sky_visible(canonical)):
                     continue  # outside fetch window — absence proves nothing
                 if p.deletes_skylight_to_todo:
                     self._tombstone(row, "skylight")

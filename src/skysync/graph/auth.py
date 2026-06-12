@@ -75,9 +75,11 @@ class DelegatedGraphAuth:
         flow = self._app.initiate_device_flow(scopes=self._scopes)
         if "user_code" not in flow:
             raise AuthError(f"device flow could not start: {flow.get('error_description', flow)}")
-        print()
-        print(flow["message"])  # e.g. "go to https://microsoft.com/devicelogin and enter XXXX"
-        print()
+        print(flush=True)
+        # e.g. "go to https://microsoft.com/devicelogin and enter XXXX".
+        # flush=True so the code appears even with block-buffered stdout.
+        print(flow["message"], flush=True)
+        print(flush=True)
         result = self._app.acquire_token_by_device_flow(flow)  # blocks until done
         self._persist_cache()
         if "access_token" not in result:
