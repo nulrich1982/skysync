@@ -140,12 +140,39 @@ def test_create_from_skylight_has_empty_notes():
     env.assert_converged()
 
 
-def test_completed_task_created_completed_everywhere():
+def test_completed_task_is_not_backfilled_to_other_sides():
+    """Done is done: an already-completed task is never CREATED on sides that
+    don't have it — and skipping it must not loop (zero writes thereafter)."""
     env = make_env()
+    env.sp.seed(task(status="completed", due=None))
+    env.run()
+    assert env.todo.items == {} and env.sky.items == {}
+    row = env.only_row()
+    assert row.status == "completed"
+    assert row.canonical().due_date is None  # and no date was stamped on it
+    env.assert_converged()
+
+
+def test_backfill_completed_policy_restores_old_behavior():
+    env = make_env(SyncPolicy(backfill_completed=True))
     env.sp.seed(task(status="completed"))
     env.run()
     assert next(iter(env.todo.items.values())).task.status == "completed"
     assert next(iter(env.sky.items.values())).task.status == "completed"
+    env.assert_converged()
+
+
+def test_create_cap_drains_backlog_across_runs():
+    env = make_env(SyncPolicy(max_creates_per_side=2))
+    for i in range(5):
+        env.sp.seed(task(title=f"Task {i}"))
+    r1 = env.run()
+    assert len(env.todo.items) == 2 and len(env.sky.items) == 2
+    assert r1.counts["deferred_creates_todo"] == 3
+    env.run()
+    assert len(env.todo.items) == 4
+    env.run()
+    assert len(env.todo.items) == 5 and len(env.sky.items) == 5
     env.assert_converged()
 
 

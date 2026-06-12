@@ -47,6 +47,8 @@ def build_policy(cfg: AppConfig) -> SyncPolicy:
         deletes_sharepoint_propagate=cfg.sync.deletes_sharepoint_propagate,
         sky_window_past_days=cfg.skylight.chore_window_days_past,
         sky_window_future_days=cfg.skylight.chore_window_days_future,
+        backfill_completed=cfg.sync.backfill_completed,
+        max_creates_per_side=cfg.sync.max_creates_per_run,
     )
 
 
@@ -57,6 +59,8 @@ def grocery_policy(cfg: AppConfig) -> SyncPolicy:
         deletes_skylight_to_todo=cfg.grocery.mirror_deletes,
         undated_due_today=False,  # groceries are dateless; never stamp dates
         sky_absence_trusted=True,  # list items are fetched unwindowed
+        backfill_completed=cfg.sync.backfill_completed,
+        max_creates_per_side=cfg.sync.max_creates_per_run,
     )
 
 

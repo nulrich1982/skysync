@@ -68,6 +68,13 @@ class SyncPolicy:
     # nothing. List items (grocery sync) are fetched unwindowed — there,
     # absence IS a delete and this flag makes the engine trust it.
     sky_absence_trusted: bool = False
+    # Never CREATE an already-completed task on a side that doesn't have it —
+    # done is done; completions still propagate to sides that DO have it.
+    backfill_completed: bool = False
+    # Safety valve: at most this many creates per side per run; the surplus
+    # re-derives next run (15-min cadence drains a backlog gradually instead
+    # of slamming an unofficial API — or amplifying a bug — in one shot).
+    max_creates_per_side: int = 100
 
 
 @dataclass
@@ -124,6 +131,7 @@ class SyncEngine:
         self._present: dict[tuple[str, Side], RemoteTask] = {}
         self._plan: list[PlannedOp] = []
         self._report = RunReport()
+        self._creates_planned: dict[Side, int] = {}
 
     # ------------------------------------------------------------ helpers --
     def _proj_hash(self, side: Side, task: CanonicalTask) -> str:
@@ -178,6 +186,7 @@ class SyncEngine:
         self._present = {}
         self._plan = []
         self._report = RunReport()
+        self._creates_planned = {s: 0 for s in self.clients}
 
         self._recover()
         snapshots = self._snapshot()
@@ -481,6 +490,9 @@ class SyncEngine:
             and sky is not None
             and not row.sky_detached
             and sky.supports(canonical)
+            # only when Skylight will actually hold it: open tasks, or a
+            # chore that is already bound (whose start can't be cleared)
+            and (canonical.status == "open" or row.side_id("skylight") is not None)
         ):
             canonical = canonical.replace(due_date=self.today())
             self.ledger.set_canonical(row.internal_id, canonical, full_hash(canonical))
@@ -511,6 +523,16 @@ class SyncEngine:
                     continue
                 self._plan_op(row.internal_id, side, "update", task=canonical, target=rt.remote_id)
             elif sid is None:
+                if canonical.status == "completed" and not self.policy.backfill_completed:
+                    # done is done — never back-fill finished tasks onto a
+                    # side that doesn't have them (no op, no journal entry;
+                    # re-evaluated and skipped again every run, zero writes)
+                    self._report.bump(f"skipped_completed_create_{side}")
+                    continue
+                if self._creates_planned[side] >= self.policy.max_creates_per_side:
+                    self._report.bump(f"deferred_creates_{side}")
+                    continue  # surplus re-derives next run (backlog drains)
+                self._creates_planned[side] += 1
                 self._plan_op(row.internal_id, side, "create", task=canonical)
             # else: id known but absent -> handled by absence phase already
 

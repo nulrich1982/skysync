@@ -85,6 +85,12 @@ class SyncConfig(BaseModel):
     deletes_skylight_to_todo: bool = False
     deletes_sharepoint_propagate: bool = True
     stream_mode: Literal["per_child", "shared"] = "per_child"
+    # Already-completed tasks are never CREATED on a side that lacks them
+    # (completions on synced tasks always propagate regardless).
+    backfill_completed: bool = False
+    # At most this many creates per side per run; a backlog drains across
+    # successive scheduled runs instead of flooding an API in one shot.
+    max_creates_per_run: int = 100
 
 
 class ChildMapping(BaseModel):
