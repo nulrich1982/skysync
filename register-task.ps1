@@ -58,9 +58,11 @@ $Action = New-ScheduledTaskAction `
     -Argument "-m skysync.main --config `"$RepoRoot\config.toml`" run --live" `
     -WorkingDirectory $RepoRoot
 
+# NOTE: no -RepetitionDuration. [TimeSpan]::MaxValue serializes to a value
+# Task Scheduler rejects ("P99999999DT23H59M59S ... out of range"); an
+# interval with no duration repeats indefinitely, which is what we want.
 $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes)
 
 $Settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
@@ -84,6 +86,12 @@ Register-ScheduledTask `
     -Password $cred.GetNetworkCredential().Password `
     -RunLevel Limited `
     -Force | Out-Null
+
+# CIM errors from Register-ScheduledTask don't always honor
+# ErrorActionPreference - verify the task actually exists before celebrating.
+if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+    throw "Task '$TaskName' was NOT registered - see the error above."
+}
 
 Write-Host "Registered. First run in ~1 minute. Useful commands:"
 Write-Host "  Start-ScheduledTask  -TaskName $TaskName        # run now"
