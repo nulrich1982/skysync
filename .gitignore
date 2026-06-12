@@ -47,3 +47,6 @@ Desktop.ini
 .DS_Store
 .idea/
 .vscode/
+
+# local publishing staging area
+publish/

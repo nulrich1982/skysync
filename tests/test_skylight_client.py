@@ -501,6 +501,12 @@ class TestGenerator:
         from pathlib import Path
 
         repo_root = Path(__file__).resolve().parent.parent
+        spec = repo_root / "src" / "skysync" / "skylight" / "spec" / "skylight-openapi.yaml"
+        if not spec.exists():
+            pytest.skip(
+                "vendored OpenAPI spec not present (it ships separately — see "
+                "README); models_generated.py is committed, so the client works without it"
+            )
         generator = repo_root / "tools" / "generate_skylight_models.py"
         result = subprocess.run(
             [sys.executable, str(generator)],
