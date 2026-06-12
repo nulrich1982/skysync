@@ -133,6 +133,28 @@ class TestAssigneeResolution:
         adapter = make_adapter()
         assert adapter._resolve_category_id("KAYLA") == "100"
 
+    def test_configured_non_chore_chart_category_fails_loud(self) -> None:
+        """A CONFIGURED mapping to a category with selected_for_chore_chart =
+        False must raise ConfigError (chores there are invisible on the frame
+        — observed live with a calendar category)."""
+        cal = make_category("400", "Ulrich Family")
+        cal.attributes.selected_for_chore_chart = False
+        adapter = make_adapter(
+            categories=[make_category("100", "Kayla"), cal],
+            child_categories={"family": "Ulrich Family"},
+        )
+        with pytest.raises(ConfigError, match="chore chart"):
+            adapter.supports(CanonicalTask(title="x", assignee="family"))
+
+    def test_unmapped_label_to_non_chart_category_is_skipped_not_fatal(self) -> None:
+        """A merely *incidental* assignee matching a non-chart category label
+        resolves to None (task skipped for Skylight) rather than raising."""
+        cal = make_category("400", "Holidays")
+        cal.attributes.selected_for_chore_chart = False
+        adapter = make_adapter(categories=[cal], child_categories={})
+        assert adapter._resolve_category_id("holidays") is None
+        assert not adapter.supports(CanonicalTask(title="x", assignee="holidays"))
+
     def test_unmapped_label_passthrough_lowercase(self) -> None:
         """An assignee not in child_categories but matching a category label resolves."""
         categories = [make_category("300", "Aunt Maria")]
@@ -324,7 +346,9 @@ class TestCreateUpdateTask:
         with pytest.raises(PermanentApiError):
             adapter.create_task(task, "internal-1")
 
-    def test_update_task_sends_complete_status(self) -> None:
+    def test_update_task_splits_status_into_second_call(self) -> None:
+        """Skylight rejects PUTs mixing completion status with other
+        attributes (observed live) — attrs first, then status alone."""
         adapter = make_adapter()
         task = CanonicalTask(
             title="Done",
@@ -332,13 +356,15 @@ class TestCreateUpdateTask:
             due_date=datetime.date(2025, 12, 29),
             status="completed",
         )
-        rt = adapter.update_task("55900629", task, "internal-1")
-        # The chore returned by update will have the status set
-        call_kwargs = adapter._api.update_chore.call_args
-        assert call_kwargs.kwargs.get("status") == "complete"
+        adapter.update_task("55900629", task, "internal-1")
+        calls = adapter._api.update_chore.call_args_list
+        assert len(calls) == 2
+        assert "status" not in calls[0].kwargs  # attributes-only PUT
+        assert calls[0].kwargs.get("summary") == "Done"
+        assert calls[1].kwargs == {"status": "complete"}  # status-only PUT
 
-    def test_update_task_sends_pending_status(self) -> None:
-        adapter = make_adapter()
+    def test_update_task_skips_status_call_when_unchanged(self) -> None:
+        adapter = make_adapter()  # fake update_chore returns status "pending"
         task = CanonicalTask(
             title="Open",
             assignee="kayla",
@@ -346,8 +372,9 @@ class TestCreateUpdateTask:
             status="open",
         )
         adapter.update_task("55900629", task, "internal-1")
-        call_kwargs = adapter._api.update_chore.call_args
-        assert call_kwargs.kwargs.get("status") == "pending"
+        calls = adapter._api.update_chore.call_args_list
+        assert len(calls) == 1
+        assert "status" not in calls[0].kwargs
 
 
 # ---------------------------------------------------------------------------

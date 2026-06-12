@@ -78,13 +78,18 @@ class SkylightListTaskClient:
         )
 
     def update_task(self, remote_id: str, task: CanonicalTask, internal_id: str) -> RemoteTask:
+        # Same observed Skylight rule as chores: don't mix completion status
+        # with other attributes in one PUT — label first, then status if it
+        # differs.
         list_id = self._resolve_list_id()
-        item = self._api.update_list_item(
-            list_id,
-            remote_id,
-            label=task.title.strip(),
-            status="completed" if task.status == "completed" else "pending",
-        )
+        item = self._api.update_list_item(list_id, remote_id, label=task.title.strip())
+        currently_completed = (item.attributes.status or "") in {"completed", "complete"}
+        if currently_completed != (task.status == "completed"):
+            item = self._api.update_list_item(
+                list_id,
+                remote_id,
+                status="completed" if task.status == "completed" else "pending",
+            )
         status = "completed" if (item.attributes.status or "") in {"completed", "complete"} else "open"
         return RemoteTask(
             side="skylight",

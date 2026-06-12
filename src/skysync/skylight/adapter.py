@@ -61,7 +61,9 @@ class SkylightTaskClient:
     ) -> None:
         self._api = api
         # Maps lowercase child_key -> configured Skylight category label.
-        self._child_categories = child_categories
+        # An EMPTY label means "To Do-only": the list still syncs within
+        # To Do, but its tasks are never placed on the frame.
+        self._child_categories = {k: v for k, v in child_categories.items() if v and v.strip()}
         self._window_past = window_past_days
         self._window_future = window_future_days
         self._sync_recurring = sync_recurring
@@ -81,6 +83,13 @@ class SkylightTaskClient:
         cats: list[Category] = self._api.get_categories()
         self._id_to_label = {c.id: c.attributes.label for c in cats}
         self._lower_label_to_id = {c.attributes.label.lower(): c.id for c in cats}
+        # Only chore-chart-enabled categories can hold visible chores; chores
+        # created in others exist but never appear on the frame OR in the
+        # chores endpoint (observed live: 'Ulrich Family' calendar category).
+        # Absent flag (None) is given the benefit of the doubt.
+        self._chartable = {
+            c.id for c in cats if getattr(c.attributes, "selected_for_chore_chart", None) is not False
+        }
 
     def _resolve_category_id(self, assignee: str) -> str | None:
         """Return Skylight category id for a canonical assignee, or None."""
@@ -96,9 +105,19 @@ class SkylightTaskClient:
                     f"child key {assignee!r}) was not found in the frame's categories. "
                     "Check [mapping.children] skylight_category values in config.toml."
                 )
+            if cat_id not in self._chartable:
+                raise ConfigError(
+                    f"Skylight category {configured_label!r} (configured for "
+                    f"{assignee!r}) is not enabled for the chore chart — chores "
+                    "created there are invisible on the frame. Enable it as a "
+                    "chore-chart member in the frame settings, or map to a "
+                    "person category."
+                )
             return cat_id
-        # 2. Fallback: if the assignee string matches any category label directly.
-        return self._lower_label_to_id.get(lower)  # type: ignore[union-attr]
+        # 2. Fallback: an assignee matching a category label directly counts
+        # only if that category can actually display chores.
+        cat_id = self._lower_label_to_id.get(lower)  # type: ignore[union-attr]
+        return cat_id if cat_id in self._chartable else None
 
     def _category_id_to_assignee(self, category_id: str | None) -> str | None:
         """Reverse-map category_id -> canonical assignee string."""
@@ -121,27 +140,25 @@ class SkylightTaskClient:
     # ------------------------------------------------------------------
 
     def representable(self, fieldname: str, value: Any) -> bool:
-        """Whether this side can faithfully represent the given field+value."""
+        """Whether this side can faithfully represent the given field+value.
+
+        A ConfigError from resolution (a CONFIGURED mapping that is broken —
+        missing label or non-chore-chart category) propagates: that's a setup
+        problem and must abort the run loudly, not silently skip tasks.
+        """
         if fieldname == "assignee":
             if value is None:
                 return False
-            try:
-                cat_id = self._resolve_category_id(str(value))
-            except ConfigError:
-                return False
-            return cat_id is not None
+            return self._resolve_category_id(str(value)) is not None
         # All other projection fields are always representable.
         return True
 
     def supports(self, task: CanonicalTask) -> bool:
-        """A task is supported if its assignee resolves to a Skylight category."""
+        """A task is supported if its assignee resolves to a chore-chart
+        category. Broken CONFIGURED mappings raise (see representable)."""
         if task.assignee is None:
             return False
-        try:
-            cat_id = self._resolve_category_id(task.assignee)
-        except ConfigError:
-            return False
-        return cat_id is not None
+        return self._resolve_category_id(task.assignee) is not None
 
     def list_tasks(self) -> list[RemoteTask]:
         """Fetch chores from the configured window and convert to RemoteTasks."""
@@ -204,16 +221,26 @@ class SkylightTaskClient:
     def update_task(
         self, remote_id: str, task: CanonicalTask, internal_id: str
     ) -> RemoteTask:
-        """Update an existing chore on Skylight."""
+        """Update an existing chore on Skylight.
+
+        The API rejects a PUT that mixes the completion status with other
+        attributes ("you can either update the completion status, or update
+        non-completion attributes, but not both") — observed live. So:
+        attributes first, then the status alone iff it differs.
+        """
         cat_id = self._resolve_category_id(task.assignee or "") if task.assignee else None
-        skylight_status = "complete" if task.status == "completed" else "pending"
         chore = self._api.update_chore(
             remote_id,
             summary=task.title.strip(),
             category_id=cat_id,
             start=task.due_date,
-            status=skylight_status,
         )
+        currently_completed = chore.attributes.status in {"complete", "completed"}
+        desired_completed = task.status == "completed"
+        if currently_completed != desired_completed:
+            chore = self._api.update_chore(
+                remote_id, status="complete" if desired_completed else "pending"
+            )
         return self._chore_to_remote(chore)
 
     def delete_task(self, remote_id: str) -> None:
