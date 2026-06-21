@@ -99,7 +99,7 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
             list_id=cfg.sharepoint.list_id,
             sp_assignees={k: v.sp_assignee or k for k, v in children.items()},
         )
-    sky_api = SkylightApi(cfg.skylight.frame_id, store)
+    sky_api = SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers)
     sky = SkylightTaskClient(
         sky_api,
         child_categories={k: v.skylight_category for k, v in children.items()},
@@ -129,7 +129,10 @@ def build_grocery_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
         DelegatedGraphAuth(cfg.graph, store, include_sharepoint_scope=sharepoint_delegated(cfg)).get_token
     )
     todo = TodoTaskClient(session, child_lists={}, default_list=cfg.grocery.todo_list)
-    sky = SkylightListTaskClient(SkylightApi(cfg.skylight.frame_id, store), cfg.grocery.skylight_list)
+    sky = SkylightListTaskClient(
+        SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers),
+        cfg.grocery.skylight_list,
+    )
     return {"todo": todo, "skylight": sky}
 
 

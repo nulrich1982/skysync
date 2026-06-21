@@ -65,6 +65,12 @@ class SkylightConfig(BaseModel):
     chore_window_days_past: int = 14
     chore_window_days_future: int = 60
     sync_recurring: bool = False  # recurring/routine chores are Skylight-native
+    # Extra HTTP headers sent on every Skylight request. Used to satisfy the
+    # client-version gate on POST /sessions (login): the API rejects logins
+    # lacking a current app-version header with "This version of Skylight is
+    # no longer supported." Capture the header(s) from a working browser
+    # session (DevTools) and put them here. Non-secret.
+    headers: dict[str, str] = Field(default_factory=dict)
 
 
 class GroceryConfig(BaseModel):

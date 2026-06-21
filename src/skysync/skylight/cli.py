@@ -42,7 +42,7 @@ def _cmd_dump(ns: argparse.Namespace) -> int:
 
     cfg = load_config(ns.config)
     secrets = SecretStore(cfg.resolve("secrets"))
-    api = SkylightApi(frame_id=cfg.skylight.frame_id, secrets=secrets)
+    api = SkylightApi(frame_id=cfg.skylight.frame_id, secrets=secrets, extra_headers=cfg.skylight.headers)
 
     today = datetime.date.today()
     after = today - datetime.timedelta(days=ns.days_past)

@@ -56,6 +56,7 @@ class SkylightApi:
         secrets: SecretStore,
         base_url: str = "https://app.ourskylight.com/api",
         timeout: float = 30.0,
+        extra_headers: dict[str, str] | None = None,
     ) -> None:
         self._frame_id = frame_id
         self._secrets = secrets
@@ -76,6 +77,10 @@ class SkylightApi:
                 "Referer": "https://app.ourskylight.com/",
             }
         )
+        # Config-supplied headers (e.g. the app-version header the login
+        # endpoint requires) override the defaults above.
+        if extra_headers:
+            self._session.headers.update(extra_headers)
         # Cached full Authorization header value — resolved lazily.
         self._auth_header: str | None = None
         # Whether we authenticated via email+password (vs. pre-captured token).
