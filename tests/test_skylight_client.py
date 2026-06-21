@@ -304,6 +304,85 @@ class TestTokenResolution:
             api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
 
 
+class _DictStore:
+    """Minimal in-memory stand-in for SecretStore (password-mode caching)."""
+
+    def __init__(self, **values: str) -> None:
+        self._v = dict(values)
+
+    def get_optional(self, name: str) -> str | None:
+        return self._v.get(name)
+
+    def get(self, name: str) -> str:
+        return self._v[name]
+
+    def set(self, name: str, value: str) -> None:
+        self._v[name] = value
+
+    def delete(self, name: str) -> None:
+        self._v.pop(name, None)
+
+
+class TestPasswordModeSessionCaching:
+    def test_cached_session_reused_without_login(self) -> None:
+        """A persisted skylight_session is reused; /sessions is NOT called."""
+        store = _DictStore(
+            skylight_email="u@example.com", skylight_password="pw", skylight_session="cached-tok"
+        )
+        api = SkylightApi(frame_id="4418006", secrets=store, base_url="https://fake")
+        logins = [0]
+
+        def fake_request(method: str, url: str, **kw: Any) -> FakeResponse:
+            if "/sessions" in url:
+                logins[0] += 1
+                return FakeResponse(SESSION_PAYLOAD)
+            return FakeResponse(CHORE_EXAMPLE_PAYLOAD)
+
+        api._session.request = fake_request  # type: ignore[method-assign]
+        api._session.post = lambda url, **kw: fake_request("POST", url, **kw)  # type: ignore[method-assign]
+
+        api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+        assert logins[0] == 0  # reused the cached token, no login
+        assert api._auth_header == "Basic cached-tok"
+
+    def test_first_login_persists_session(self) -> None:
+        """With no cached session, login happens once and is persisted."""
+        store = _DictStore(skylight_email="u@example.com", skylight_password="pw")
+        api = SkylightApi(frame_id="4418006", secrets=store, base_url="https://fake")
+        api._session.request = lambda method, url, **kw: FakeResponse(  # type: ignore[method-assign]
+            SESSION_PAYLOAD if "/sessions" in url else CHORE_EXAMPLE_PAYLOAD
+        )
+        api._session.post = lambda url, **kw: FakeResponse(SESSION_PAYLOAD)  # type: ignore[method-assign]
+
+        api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+        assert store.get_optional("skylight_session") == "abc123token"  # from SESSION_PAYLOAD
+
+    def test_expired_cached_session_drops_and_relogins(self) -> None:
+        """A stale cached session 401s, gets dropped, re-login persists a new one."""
+        store = _DictStore(
+            skylight_email="u@example.com", skylight_password="pw", skylight_session="stale-tok"
+        )
+        api = SkylightApi(frame_id="4418006", secrets=store, base_url="https://fake")
+        logins = [0]
+
+        def fake_request(method: str, url: str, **kw: Any) -> FakeResponse:
+            if "/sessions" in url:
+                logins[0] += 1
+                return FakeResponse(SESSION_PAYLOAD)  # mints "abc123token"
+            auth = (kw.get("headers") or {}).get("Authorization", "")
+            if auth == "Basic stale-tok":
+                return FakeResponse({"error": "unauthorized"}, status_code=401)
+            return FakeResponse(CHORE_EXAMPLE_PAYLOAD)
+
+        api._session.request = fake_request  # type: ignore[method-assign]
+        api._session.post = lambda url, **kw: fake_request("POST", url, **kw)  # type: ignore[method-assign]
+
+        result = api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+        assert len(result.data) == 2  # succeeded after re-login
+        assert logins[0] == 1
+        assert store.get_optional("skylight_session") == "abc123token"  # refreshed
+
+
 # ---------------------------------------------------------------------------
 # Chore parsing tests
 # ---------------------------------------------------------------------------

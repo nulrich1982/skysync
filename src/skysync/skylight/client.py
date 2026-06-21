@@ -38,6 +38,10 @@ from .models_generated import (
 
 log = logging.getLogger(__name__)
 
+# DPAPI secret name for the password-mode session token minted from
+# /sessions. Reused across runs and auto-refreshed on a 401.
+_SESSION_SECRET = "skylight_session"
+
 
 class SkylightApi:
     """Client for the unofficial Skylight Calendar REST API.
@@ -83,7 +87,16 @@ class SkylightApi:
 
     def _resolve_auth_header(self) -> str:
         """Return (and cache) the full Authorization header value, performing
-        login if needed."""
+        login if needed.
+
+        Priority:
+          1. A user-captured ``skylight_token`` (token mode) — used verbatim.
+          2. Password mode: reuse a DPAPI-cached session token if present
+             (``_SESSION_SECRET``), else log in once and cache the result.
+        Caching the minted session token means we only hit /sessions when the
+        token actually expires (a 401), not on every scheduled run — gentle on
+        the unofficial API and far less likely to trip login rate limits.
+        """
         if self._auth_header is not None:
             return self._auth_header
 
@@ -101,13 +114,17 @@ class SkylightApi:
             self._password_mode = False
             return self._auth_header
 
-        # Fall back to email + password login.
+        # Password mode. Reuse a cached session token across runs if we have one.
         self._password_mode = True
-        self._auth_header = f"Basic {self._login()}"
+        cached = self._secrets.get_optional(_SESSION_SECRET)
+        token = cached if cached else self._login()
+        self._auth_header = f"Basic {token}"
         return self._auth_header
 
     def _login(self) -> str:
-        """POST /sessions and return the token. Raises AuthError on failure."""
+        """POST /sessions, cache the token (DPAPI), and return it.
+
+        Raises AuthError on failure."""
         email = self._secrets.get("skylight_email")
         password = self._secrets.get("skylight_password")
         url = f"{self._base_url}/sessions"
@@ -125,10 +142,15 @@ class SkylightApi:
                 f"Skylight login failed (HTTP {exc.status}). "
                 "Check skylight_email / skylight_password secrets."
             ) from exc
-        return self._parse(resp, SessionResponse, "POST /sessions").data.attributes.token
+        token = self._parse(resp, SessionResponse, "POST /sessions").data.attributes.token
+        self._secrets.set(_SESSION_SECRET, token)  # persist for reuse next run
+        return token
 
     def _invalidate_token(self) -> None:
         self._auth_header = None
+        # Drop the stale cached session so the next resolve forces a re-login.
+        if self._password_mode:
+            self._secrets.delete(_SESSION_SECRET)
 
     # ------------------------------------------------------------------
     # Transport

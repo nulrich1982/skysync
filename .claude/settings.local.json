@@ -7,7 +7,25 @@
       "PowerShell(git commit -m \"Add .gitignore excluding all secret material \\(first commit, per security constraint\\)\")",
       "PowerShell($f = \"src\\\\skysync\\\\skylight\\\\spec\\\\skylight-openapi.yaml\"; Select-String -Path $f -Pattern '^\\\\s{4}\\(get|post|put|patch|delete\\):' | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
       "WebFetch(domain:www.npmjs.com)",
-      "PowerShell($env:PYTHONPATH=\"src\"; python tools/trace_lifecycle.py)"
+      "PowerShell($env:PYTHONPATH=\"src\"; python tools/trace_lifecycle.py)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "PowerShell(npm view @anthropic-ai/sdk version)",
+      "PowerShell(npm view @azure/functions version)",
+      "PowerShell(npm view vitest version)",
+      "PowerShell(npm view typescript version)",
+      "Bash(npx vitest *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('D:/OneDrive/Documents/Claude/OutsideCounsel/fixtures/pdf/invoice-jpy.expected.json'\\)\\); print\\(d['invoice'].get\\('gross_total'\\), d['invoice'].get\\('currency'\\)\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(npm show *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('main:', d.get\\('main'\\)\\); print\\('type:', d.get\\('type',''\\)\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('exports',{}\\), indent=2\\)\\)\")",
+      "PowerShell($file = \"D:\\\\OneDrive\\\\Documents\\\\Claude\\\\OutsideCounsel\\\\packages\\\\web\\\\dist\\\\assets\\\\index-DyLLIG4f.js\"; $content = Get-Content $file -Raw; $idx = $content.IndexOf\\(\"ANTHROPIC\"\\); if \\($idx -ge 0\\) { $content.Substring\\([Math]::Max\\(0,$idx-200\\), 500\\) })",
+      "PowerShell($file = \"D:\\\\OneDrive\\\\Documents\\\\Claude\\\\OutsideCounsel\\\\packages\\\\web\\\\dist\\\\assets\\\\index-DyLLIG4f.js\"; $content = Get-Content $file -Raw; $idx = $content.ToLower\\(\\).IndexOf\\(\"anthropic\"\\); if \\($idx -ge 0\\) { \"Found at: $idx\"; $content.Substring\\([Math]::Max\\(0,$idx-100\\), 400\\) } else { \"Not found\" })",
+      "PowerShell($file = \"D:\\\\OneDrive\\\\Documents\\\\Claude\\\\OutsideCounsel\\\\packages\\\\web\\\\dist\\\\assets\\\\index-DyLLIG4f.js\"; $content = Get-Content $file -Raw; $checks = @\\(\"createAnthropicCaller\",\"extractPdfDocument\",\"pdfBufferToText\",\"loadModelConfig\",\"@anthropic-ai/sdk\",\"pdf-parse\",\"PDFParse\",\"sk-ant-\"\\); foreach \\($c in $checks\\) { if \\($content -match [regex]::Escape\\($c\\)\\) { \"FOUND: $c\" } else { \"OK: $c not in bundle\" } })",
+      "Bash(curl -s -X POST -H \"Content-Type: application/pdf\" --data-binary \"%PDF-1.4 test\" http://localhost:5173/api/extract -w \"\\\\nHTTP %{http_code}\\\\n\")"
     ]
   }
 }

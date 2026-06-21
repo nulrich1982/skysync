@@ -92,12 +92,17 @@ as `secrets\*.bin` (gitignored; useless on any other machine/account).
 **Do this logged in as the account the scheduled task will run as.**
 
 ```powershell
-# token mode (paste the captured Authorization value; preferred):
-python -m skysync.secrets set skylight_token
-
-# OR password mode (SkySync logs in via POST /api/sessions):
+# password mode (RECOMMENDED — self-renewing, no manual refresh):
 python -m skysync.secrets set skylight_email
 python -m skysync.secrets set skylight_password
+# SkySync logs in via POST /api/sessions, caches the minted token
+# (skylight_session, managed automatically), and re-logs-in on a 401. A
+# captured browser token (below) expires in ~days and must be re-pasted;
+# password mode does not. If both are present, skylight_token wins — delete
+# it to use password mode: python -m skysync.secrets delete skylight_token
+
+# OR token mode (paste a captured Authorization value; expires in ~days):
+python -m skysync.secrets set skylight_token
 
 python -m skysync.secrets list
 python -m skysync.secrets check skylight_token   # decrypts, prints length only
