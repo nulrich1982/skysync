@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 import requests
 from pydantic import ValidationError
@@ -57,11 +57,16 @@ class SkylightApi:
         base_url: str = "https://app.ourskylight.com/api",
         timeout: float = 30.0,
         extra_headers: dict[str, str] | None = None,
+        refresh_callback: "Callable[[], str] | None" = None,
     ) -> None:
         self._frame_id = frame_id
         self._secrets = secrets
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        # Called on a token-mode 401 to obtain a fresh full Authorization
+        # header value (e.g. "Bearer xyz"). The callback also persists the
+        # new token. None -> no auto-refresh (raise AuthError on 401).
+        self._refresh_callback = refresh_callback
         self._session = requests.Session()
         # Cloudflare fronts the API and 403-blocks the default python-requests
         # User-Agent; present browser-like headers (same as the web app).
@@ -221,6 +226,33 @@ class SkylightApi:
                             "Skylight returned 401 after re-login. "
                             "Credentials may be invalid. "
                             "Re-seed skylight_email / skylight_password."
+                        ) from exc2
+                    raise
+            elif self._refresh_callback is not None:
+                # Token mode with auto-refresh: drive a browser login once to
+                # mint a fresh token, then retry this request exactly once.
+                log.info("%s: token 401, running auto-refresh (browser login)", what)
+                try:
+                    new_header = self._refresh_callback()
+                except AuthError:
+                    raise
+                except Exception as exc2:  # refresher failed (no browser, etc.)
+                    raise AuthError(f"Skylight token auto-refresh failed: {exc2}") from exc2
+                self._auth_header = new_header
+
+                def _do_refreshed() -> requests.Response:
+                    return self._session.request(
+                        method, url, headers={"Authorization": new_header},
+                        json=json, params=params, timeout=self._timeout,
+                    )
+
+                try:
+                    return retry_call(_do_refreshed, what=what)
+                except PermanentApiError as exc2:
+                    if exc2.status == 401:
+                        raise AuthError(
+                            "Skylight returned 401 even after auto-refresh. "
+                            "Check skylight_email / skylight_password."
                         ) from exc2
                     raise
             else:

@@ -18,6 +18,11 @@ dependencies = [
 dev = [
     "pytest>=8,<9",
 ]
+# Optional: hands-off Skylight token refresh via a headless browser login.
+# After `pip install -e ".[browser]"` run `playwright install chromium` once.
+browser = [
+    "playwright>=1.44,<2",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

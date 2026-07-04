@@ -304,6 +304,57 @@ class TestTokenResolution:
             api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
 
 
+class TestTokenModeAutoRefresh:
+    def test_401_triggers_refresh_callback_then_retries(self) -> None:
+        """Token-mode 401 with a refresh_callback: mint a new token, retry once."""
+        secrets = MagicMock()
+        secrets.get_optional.return_value = "Bearer stale"  # token mode
+        calls = {"refresh": 0}
+
+        def refresh() -> str:
+            calls["refresh"] += 1
+            return "Bearer fresh"
+
+        api = SkylightApi(
+            frame_id="4418006", secrets=secrets, base_url="https://fake", refresh_callback=refresh
+        )
+
+        def fake_request(method: str, url: str, **kw: Any) -> FakeResponse:
+            auth = (kw.get("headers") or {}).get("Authorization", "")
+            if auth == "Bearer stale":
+                return FakeResponse({"error": "unauthorized"}, status_code=401)
+            return FakeResponse(CHORE_EXAMPLE_PAYLOAD)  # accepts "Bearer fresh"
+
+        api._session.request = fake_request  # type: ignore[method-assign]
+
+        result = api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+        assert len(result.data) == 2
+        assert calls["refresh"] == 1
+        assert api._auth_header == "Bearer fresh"
+
+    def test_401_after_refresh_raises_autherror(self) -> None:
+        secrets = MagicMock()
+        secrets.get_optional.return_value = "Bearer stale"
+        api = SkylightApi(
+            frame_id="4418006", secrets=secrets, base_url="https://fake",
+            refresh_callback=lambda: "Bearer alsobad",
+        )
+        api._session.request = lambda method, url, **kw: FakeResponse(  # type: ignore[method-assign]
+            {"error": "unauthorized"}, status_code=401
+        )
+        with pytest.raises(AuthError, match="after auto-refresh"):
+            api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+
+    def test_no_callback_still_raises_plain_autherror(self) -> None:
+        api = make_api(token="expired-tok")
+        api._auth_header, api._password_mode = "Basic expired-tok", False
+        api._session.request = lambda method, url, **kw: FakeResponse(  # type: ignore[method-assign]
+            {"error": "unauthorized"}, status_code=401
+        )
+        with pytest.raises(AuthError, match="skylight_token"):
+            api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
+
+
 class _DictStore:
     """Minimal in-memory stand-in for SecretStore (password-mode caching)."""
 

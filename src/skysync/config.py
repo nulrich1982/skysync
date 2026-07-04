@@ -71,6 +71,13 @@ class SkylightConfig(BaseModel):
     # no longer supported." Capture the header(s) from a working browser
     # session (DevTools) and put them here. Non-secret.
     headers: dict[str, str] = Field(default_factory=dict)
+    # On a token-mode 401 (expired skylight_token), drive a headless browser
+    # login (skylight_email/password) to capture a fresh token and retry —
+    # hands-off token renewal. Requires the optional 'browser' extra
+    # (playwright) and seeded skylight_email/skylight_password.
+    auto_refresh_token: bool = False
+    # Headless by default; set false to watch the refresh browser (debugging).
+    auto_refresh_headless: bool = True
 
 
 class GroceryConfig(BaseModel):

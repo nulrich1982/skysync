@@ -64,6 +64,24 @@ def grocery_policy(cfg: AppConfig) -> SyncPolicy:
     )
 
 
+def make_skylight_api(cfg: AppConfig, store) -> "object":
+    """Build a SkylightApi, wiring the browser-login token refresher when
+    [skylight].auto_refresh_token is set."""
+    from .skylight.client import SkylightApi
+
+    refresh_cb = None
+    if cfg.skylight.auto_refresh_token:
+        from .skylight.token_refresh import refresh_token_via_browser
+
+        refresh_cb = lambda: refresh_token_via_browser(cfg, store)  # noqa: E731
+    return SkylightApi(
+        cfg.skylight.frame_id,
+        store,
+        extra_headers=cfg.skylight.headers,
+        refresh_callback=refresh_cb,
+    )
+
+
 def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     # Imported lazily so --mock works without msal/requests reachability.
     from .graph.auth import AppOnlyGraphAuth, DelegatedGraphAuth, GraphSession
@@ -71,7 +89,6 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     from .graph.todo_client import TodoTaskClient
     from .secrets import SecretStore
     from .skylight.adapter import SkylightTaskClient
-    from .skylight.client import SkylightApi
 
     store = SecretStore(cfg.resolve("secrets"))
     delegated = DelegatedGraphAuth(
@@ -99,7 +116,7 @@ def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
             list_id=cfg.sharepoint.list_id,
             sp_assignees={k: v.sp_assignee or k for k, v in children.items()},
         )
-    sky_api = SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers)
+    sky_api = make_skylight_api(cfg, store)
     sky = SkylightTaskClient(
         sky_api,
         child_categories={k: v.skylight_category for k, v in children.items()},
@@ -121,7 +138,6 @@ def build_grocery_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
     from .graph.auth import DelegatedGraphAuth, GraphSession
     from .graph.todo_client import TodoTaskClient
     from .secrets import SecretStore
-    from .skylight.client import SkylightApi
     from .skylight.list_adapter import SkylightListTaskClient
 
     store = SecretStore(cfg.resolve("secrets"))
@@ -129,10 +145,7 @@ def build_grocery_clients(cfg: AppConfig) -> dict[Side, TaskClient]:
         DelegatedGraphAuth(cfg.graph, store, include_sharepoint_scope=sharepoint_delegated(cfg)).get_token
     )
     todo = TodoTaskClient(session, child_lists={}, default_list=cfg.grocery.todo_list)
-    sky = SkylightListTaskClient(
-        SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers),
-        cfg.grocery.skylight_list,
-    )
+    sky = SkylightListTaskClient(make_skylight_api(cfg, store), cfg.grocery.skylight_list)
     return {"todo": todo, "skylight": sky}
 
 
