@@ -65,21 +65,11 @@ def grocery_policy(cfg: AppConfig) -> SyncPolicy:
 
 
 def make_skylight_api(cfg: AppConfig, store) -> "object":
-    """Build a SkylightApi, wiring the browser-login token refresher when
-    [skylight].auto_refresh_token is set."""
+    """Build a SkylightApi. Auth is resolved inside the client: OAuth refresh
+    token (preferred, hands-off) if present, else a captured skylight_token."""
     from .skylight.client import SkylightApi
 
-    refresh_cb = None
-    if cfg.skylight.auto_refresh_token:
-        from .skylight.token_refresh import refresh_token_via_browser
-
-        refresh_cb = lambda: refresh_token_via_browser(cfg, store)  # noqa: E731
-    return SkylightApi(
-        cfg.skylight.frame_id,
-        store,
-        extra_headers=cfg.skylight.headers,
-        refresh_callback=refresh_cb,
-    )
+    return SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers)
 
 
 def build_live_clients(cfg: AppConfig) -> dict[Side, TaskClient]:

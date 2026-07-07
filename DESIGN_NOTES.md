@@ -29,6 +29,33 @@ conflict resolution, delete policies, and propagation operate on canonical
 state, with SharePoint ordered first as the system of record. All writes are
 journaled in the ledger (`pending_ops`) before execution.
 
+## July 2026: Skylight OAuth (hands-off auth)
+
+Manually captured Skylight bearer tokens expire ~weekly, which meant recurring
+manual re-seeding (and one silent multi-day outage). Skylight's mobile client
+actually uses **OAuth 2.0 Authorization-Code + PKCE** (public client
+`skylight-mobile`, no secret; flow reverse-engineered by the community project
+`andreabedini/skylight-cli`). `src/skysync/skylight/oauth.py` implements it:
+
+* **One-time login** (`python -m skysync.skylight.oauth login`): hit
+  `/oauth/authorize` first (server stashes the request against the session),
+  then the hosted Rails form login (`/auth/session`), then follow the redirect
+  chain back through `/oauth/authorize` to the `skylight-family://welcome?code=`
+  custom-scheme redirect; exchange the code + PKCE verifier at `/oauth/token`.
+  Plain `requests` — no browser (a `requests` session won't follow the custom
+  scheme, so we read the code from the Location header).
+* **Ongoing**: `get_access_token` returns a DPAPI-cached 2-hour access token,
+  refreshing via `grant_type=refresh_token` when near expiry. Refresh tokens
+  **rotate on every use**; the new one is persisted *before* anything else can
+  fail (same crash-safety rule as the Graph refresh token). Same-run 401 forces
+  one refresh + retry.
+
+The client auth precedence is: OAuth refresh token (if present) → captured
+`skylight_token` (legacy) → password mode (dead — `/api/sessions` is the
+version-gated mobile endpoint). This retired an earlier parked Playwright
+browser-login attempt (Skylight's cross-domain login→app handshake never
+completed under automation).
+
 ## June 2026 addition: grocery-list pairing
 
 A second engine instance mirrors one Skylight LIST (default "Grocery List")

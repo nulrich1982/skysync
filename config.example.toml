@@ -54,16 +54,16 @@ chore_window_days_future = 60
 # Recurring/routine chores are Skylight-native (rendered as instances of an
 # RRULE); they are NOT synced by default and are left alone on the frame.
 sync_recurring = false
-# Hands-off token renewal (recommended): on a token 401, a headless browser
-# logs in (skylight_email/password) to capture a fresh token and retries.
-# Requires: pip install -e ".[browser]"  then  playwright install chromium
-auto_refresh_token = false
-auto_refresh_headless = true
 
-# Extra headers merged into every Skylight request (capture from DevTools if a
-# version gate ever appears). Optional.
+# Extra headers merged into every Skylight request (browser-like set). Optional.
 # [skylight.headers]
 # "skylight-api-version" = "2026-05-01"
+
+# --- Skylight auth ---
+# Recommended: hands-off OAuth. Seed skylight_email + skylight_password (DPAPI),
+# run the one-time login `python -m skysync.skylight.oauth login`, and the
+# client auto-refreshes a rotating token forever. Alternatively seed a manually
+# captured `skylight_token` (expires ~weekly). OAuth wins if both are present.
 
 [sync]
 # CONFIG DECISION #3 (conflict policy). Default: most-recently-modified wins;

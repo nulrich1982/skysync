@@ -92,21 +92,25 @@ as `secrets\*.bin` (gitignored; useless on any other machine/account).
 **Do this logged in as the account the scheduled task will run as.**
 
 ```powershell
-# password mode (RECOMMENDED — self-renewing, no manual refresh):
+# OAuth (RECOMMENDED — hands-off, self-renewing, no manual refresh):
 python -m skysync.secrets set skylight_email
 python -m skysync.secrets set skylight_password
-# SkySync logs in via POST /api/sessions, caches the minted token
-# (skylight_session, managed automatically), and re-logs-in on a 401. A
-# captured browser token (below) expires in ~days and must be re-pasted;
-# password mode does not. If both are present, skylight_token wins — delete
-# it to use password mode: python -m skysync.secrets delete skylight_token
+python -m skysync.skylight.oauth login --config config.toml
+# Runs Skylight's OAuth 2.0 + PKCE login once and stores a ROTATING refresh
+# token (DPAPI). The client mints a fresh 2-hour access token from it every
+# run and rotates the refresh token automatically — like the Graph leg. No
+# manual re-seeding. Re-run only if the refresh token is ever revoked.
+python -m skysync.skylight.oauth status --config config.toml   # verify
 
-# OR token mode (paste a captured Authorization value; expires in ~days):
+# OR token mode (legacy: a captured Authorization value; expires ~weekly):
 python -m skysync.secrets set skylight_token
 
 python -m skysync.secrets list
-python -m skysync.secrets check skylight_token   # decrypts, prints length only
 ```
+
+> Auth precedence: a stored OAuth refresh token is used if present, otherwise a
+> captured `skylight_token`. The OAuth flow was documented by the community
+> project `andreabedini/skylight-cli`.
 
 ## 5. First-run Graph auth (device code)
 

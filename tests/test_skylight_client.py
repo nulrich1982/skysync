@@ -38,12 +38,18 @@ class FakeResponse:
         return self._data
 
 
+def _token_only(token: str | None):
+    """A get_optional side-effect: captured token for skylight_token, None for
+    everything else (notably no OAuth refresh token)."""
+    return lambda name: token if name == "skylight_token" else None
+
+
 def make_api(token: str = "my-token") -> SkylightApi:
     """Return an SkylightApi with a fake SecretStore that provides a static token."""
     secrets = MagicMock()
-    secrets.get_optional.return_value = token  # skylight_token
+    secrets.get_optional.side_effect = _token_only(token)  # skylight_token only
     secrets.get.return_value = None
-    secrets.exists.return_value = True
+    secrets.exists.return_value = False
     api = SkylightApi(frame_id="4418006", secrets=secrets, base_url="https://fake.example")
     return api
 
@@ -304,48 +310,37 @@ class TestTokenResolution:
             api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
 
 
-class TestTokenModeAutoRefresh:
-    def test_401_triggers_refresh_callback_then_retries(self) -> None:
-        """Token-mode 401 with a refresh_callback: mint a new token, retry once."""
+class TestOAuthMode:
+    def test_oauth_401_forces_refresh_then_retries(self, monkeypatch) -> None:
+        """OAuth mode: a stale access token 401s, force-refresh, retry once."""
+        from skysync.skylight import oauth
+
         secrets = MagicMock()
-        secrets.get_optional.return_value = "Bearer stale"  # token mode
-        calls = {"refresh": 0}
+        secrets.get_optional.side_effect = lambda n: "refresh-tok" if n == "skylight_refresh_token" else None
+        api = SkylightApi(frame_id="4418006", secrets=secrets, base_url="https://fake")
 
-        def refresh() -> str:
-            calls["refresh"] += 1
-            return "Bearer fresh"
+        monkeypatch.setattr(oauth, "get_access_token", lambda s, h=None: "stale-access")
+        refreshes = {"n": 0}
 
-        api = SkylightApi(
-            frame_id="4418006", secrets=secrets, base_url="https://fake", refresh_callback=refresh
-        )
+        def fake_refresh(s, h=None):
+            refreshes["n"] += 1
+            return "fresh-access"
+
+        monkeypatch.setattr(oauth, "refresh_access_token", fake_refresh)
 
         def fake_request(method: str, url: str, **kw: Any) -> FakeResponse:
             auth = (kw.get("headers") or {}).get("Authorization", "")
-            if auth == "Bearer stale":
+            if auth == "Bearer stale-access":
                 return FakeResponse({"error": "unauthorized"}, status_code=401)
-            return FakeResponse(CHORE_EXAMPLE_PAYLOAD)  # accepts "Bearer fresh"
+            return FakeResponse(CHORE_EXAMPLE_PAYLOAD)  # accepts "Bearer fresh-access"
 
         api._session.request = fake_request  # type: ignore[method-assign]
-
         result = api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
         assert len(result.data) == 2
-        assert calls["refresh"] == 1
-        assert api._auth_header == "Bearer fresh"
+        assert refreshes["n"] == 1
+        assert api._auth_header == "Bearer fresh-access"
 
-    def test_401_after_refresh_raises_autherror(self) -> None:
-        secrets = MagicMock()
-        secrets.get_optional.return_value = "Bearer stale"
-        api = SkylightApi(
-            frame_id="4418006", secrets=secrets, base_url="https://fake",
-            refresh_callback=lambda: "Bearer alsobad",
-        )
-        api._session.request = lambda method, url, **kw: FakeResponse(  # type: ignore[method-assign]
-            {"error": "unauthorized"}, status_code=401
-        )
-        with pytest.raises(AuthError, match="after auto-refresh"):
-            api.get_chores(date(2025, 12, 1), date(2026, 1, 31))
-
-    def test_no_callback_still_raises_plain_autherror(self) -> None:
+    def test_token_mode_401_raises_plain_autherror(self) -> None:
         api = make_api(token="expired-tok")
         api._auth_header, api._password_mode = "Basic expired-tok", False
         api._session.request = lambda method, url, **kw: FakeResponse(  # type: ignore[method-assign]
