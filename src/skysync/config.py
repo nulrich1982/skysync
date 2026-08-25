@@ -73,6 +73,24 @@ class SkylightConfig(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
+class MenuChild(BaseModel):
+    """One child's school-lunch source -> Skylight profile."""
+
+    location_id: int  # FDMealPlanner school id (389 elementary, 388 middle)
+    skylight_category: str  # profile label on the frame, e.g. "Madeline"
+
+
+class MenuConfig(BaseModel):
+    """School lunch menus -> all-day Skylight calendar events."""
+
+    enabled: bool = False
+    account_id: int = 71  # FDMealPlanner district account (Sudbury)
+    months_ahead: int = 1  # current month + this many ahead
+    title_prefix: str = "\U0001f374 "  # fork & knife
+    timezone: str = "America/New_York"
+    children: dict[str, MenuChild] = Field(default_factory=dict)
+
+
 class GroceryConfig(BaseModel):
     """Second sync pairing: a Skylight LIST mirrored to a To Do list."""
 
@@ -119,6 +137,7 @@ class AppConfig(BaseModel):
     sharepoint: SharePointConfig | None = None
     todo: TodoConfig = Field(default_factory=TodoConfig)
     grocery: GroceryConfig = Field(default_factory=GroceryConfig)
+    menu: MenuConfig = Field(default_factory=MenuConfig)
     skylight: SkylightConfig
     sync: SyncConfig = Field(default_factory=SyncConfig)
     mapping: MappingConfig = Field(default_factory=MappingConfig)

@@ -56,6 +56,38 @@ version-gated mobile endpoint). This retired an earlier parked Playwright
 browser-login attempt (Skylight's cross-domain login→app handshake never
 completed under automation).
 
+## August 2026: school lunch menus -> Skylight calendar
+
+`src/skysync/menu/` pulls each child's school lunch menu and writes one
+**all-day calendar event per school day** onto that child's Skylight profile.
+
+* **Source**: FDMealPlanner (Whitsons). The **v1** data-locator API is public —
+  no token, no login — and one request returns a whole month with each day's
+  items already parsed as JSON in `menuRecipiesData`. (The newer v2 API needs a
+  Bearer token from a client-key handshake; v1 returns the same data without
+  it, so v1 is a deliberate choice, not a fallback.) Schools are identified by
+  `locationId` under one district `accountId`; `mealPeriodId=2` is lunch.
+* **Gotcha**: every item carries `IsShowOnMenu=0` for this district, so the
+  filter used by some other integrations discards everything. We filter on
+  `isEntreeType` instead (1 = entrée choice, 0 = side/drink/condiment).
+* **Title strategy** (`DayMenu.headline`, mode `auto`): elementary menus
+  publish ~3 rotating options where #1 is the hot entrée -> show the first
+  entrée. Middle-school menus publish ~19 always-available items plus 2-4 daily
+  specials -> show the specials (computed by `mark_daily_specials`: an entrée
+  on >=80% of days is "standing"). One heuristic covers both schools with no
+  per-school config.
+* **Idempotency**: each event we own carries `[skysync-menu <hash>]` in its
+  description. A run creates missing days, updates changed ones, deletes days
+  the school un-published, removes duplicates, and **touches nothing it did not
+  create** — a converged month is zero writes. Events are matched on
+  (date, category, our marker), so a concert on the same day is never disturbed.
+* **Skylight quirk**: `date_max` on `GET /calendar_events` is **exclusive**.
+  Querying to the last menu day silently omitted it, which duplicated that day
+  every run; we query one day past the end and filter back to the managed
+  window. The managed window is the full span of months being synced (not the
+  min/max of returned days), so a day the school later removes still gets
+  cleaned up.
+
 ## June 2026 addition: grocery-list pairing
 
 A second engine instance mirrors one Skylight LIST (default "Grocery List")

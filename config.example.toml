@@ -47,6 +47,23 @@ skylight_list = "Grocery List"   # label of the list on the frame
 todo_list = "Grocery List"       # display name of the To Do list
 mirror_deletes = true
 
+[menu]
+# Optional: school lunch menus -> all-day Skylight calendar events on each
+# child's profile. Source is FDMealPlanner (public v1 API, no auth needed).
+# Find your school's ids by opening the district's FDMealPlanner calendar page:
+#   https://www.fdmealplanner.com/pages/calendar/?tenantId=3&accountId=<A>&locationId=<L>&mealPeriodId=2
+# The event title shows the day's hot entrée (elementary-style menus) or that
+# day's specials (menus with a large always-available list); the full option
+# list and sides go in the event description.
+enabled = false
+account_id = 71            # district account id
+months_ahead = 1           # sync the current month + this many ahead
+timezone = "America/New_York"
+
+# [menu.children.madeline]
+# location_id = 389        # that child's school
+# skylight_category = "Madeline"   # profile label on the frame
+
 [skylight]
 frame_id = "1234567"       # from DevTools/HAR capture — see SETUP.md
 chore_window_days_past = 14
