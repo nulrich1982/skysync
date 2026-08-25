@@ -60,9 +60,9 @@ account_id = 71            # district account id
 months_ahead = 1           # sync the current month + this many ahead
 timezone = "America/New_York"
 
-# [menu.children.madeline]
+# [menu.children.avery]
 # location_id = 389        # that child's school
-# skylight_category = "Madeline"   # profile label on the frame
+# skylight_category = "Avery"   # profile label on the frame
 
 [skylight]
 frame_id = "1234567"       # from DevTools/HAR capture — see SETUP.md

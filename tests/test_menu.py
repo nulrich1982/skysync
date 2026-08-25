@@ -81,7 +81,7 @@ def test_fetch_month_validates_envelope(monkeypatch):
 # ------------------------------------------------------- specials / headline --
 
 def test_middle_school_specials_vs_standing():
-    """19 always-available items + a couple of daily specials (Abigail's case)."""
+    """19 always-available items + a couple of daily specials (Blake's case)."""
     standing_names = [f"Standing {i}" for i in range(6)]
     days = [
         DayMenu(date=datetime.date(2026, 9, d), entrees=standing_names + [f"Special {d}"])
@@ -168,7 +168,7 @@ class FakeApi:
         self.calls = []
 
     def get_categories(self):
-        return [FakeCat("1943073", "Madeline"), FakeCat("1943059", "Abigail")]
+        return [FakeCat("9100001", "Avery"), FakeCat("9100002", "Blake")]
 
     def _request(self, method, path, json=None, params=None):
         self.calls.append((method, path, json))
@@ -199,15 +199,15 @@ def _menu_day():
 def test_sync_creates_missing_day():
     api = FakeApi()
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([_menu_day()])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([_menu_day()])
     )
     assert (rep.created, rep.updated, rep.deleted) == (1, 0, 0)
     posts = [c for c in api.calls if c[0] == "POST"]
     assert len(posts) == 1
     body = posts[0][2]
     assert body["all_day"] is True
-    assert body["category_id"] == "1943073"
+    assert body["category_id"] == "9100001"
     assert body["summary"].endswith("Chicken Nuggets")
     assert parse_stamp(body["description"])
 
@@ -221,12 +221,12 @@ def test_sync_is_idempotent_second_run():
     existing = [{
         "id": "e1",
         "attributes": {"description": stamp(body, digest), "starts_at": "2026-09-01T00:00:00.000-04:00"},
-        "relationships": {"category": {"data": {"id": "1943073"}}},
+        "relationships": {"category": {"data": {"id": "9100001"}}},
     }]
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([day])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([day])
     )
     assert (rep.created, rep.updated, rep.unchanged, rep.deleted) == (0, 0, 1, 0)
     assert [c for c in api.calls if c[0] in ("POST", "PUT", "DELETE")] == []
@@ -236,12 +236,12 @@ def test_sync_updates_changed_menu():
     existing = [{
         "id": "e1",
         "attributes": {"description": stamp("old", "deadbeef1234"), "starts_at": "2026-09-01T00:00:00.000-04:00"},
-        "relationships": {"category": {"data": {"id": "1943073"}}},
+        "relationships": {"category": {"data": {"id": "9100001"}}},
     }]
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([_menu_day()])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([_menu_day()])
     )
     assert (rep.created, rep.updated) == (0, 1)
     assert [c[0] for c in api.calls if c[0] == "PUT"] == ["PUT"]
@@ -252,18 +252,18 @@ def test_sync_deletes_unpublished_day_but_not_foreign_events():
         {  # ours, for a day no longer published
             "id": "mine",
             "attributes": {"description": stamp("x", "aaaaaaaaaaaa"), "starts_at": "2026-09-02T00:00:00.000-04:00"},
-            "relationships": {"category": {"data": {"id": "1943073"}}},
+            "relationships": {"category": {"data": {"id": "9100001"}}},
         },
         {  # someone else's event on the same profile — must be untouched
             "id": "foreign",
             "attributes": {"description": "Soccer practice", "starts_at": "2026-09-01T00:00:00.000-04:00"},
-            "relationships": {"category": {"data": {"id": "1943073"}}},
+            "relationships": {"category": {"data": {"id": "9100001"}}},
         },
     ]
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([_menu_day()])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([_menu_day()])
     )
     assert rep.deleted == 1
     deletes = [c for c in api.calls if c[0] == "DELETE"]
@@ -271,16 +271,16 @@ def test_sync_deletes_unpublished_day_but_not_foreign_events():
 
 
 def test_sync_ignores_other_childs_events():
-    """An identical-looking menu event on Abigail's profile is not Madeline's."""
+    """An identical-looking menu event on Blake's profile is not Avery's."""
     existing = [{
         "id": "abby",
         "attributes": {"description": stamp("x", "bbbbbbbbbbbb"), "starts_at": "2026-09-01T00:00:00.000-04:00"},
-        "relationships": {"category": {"data": {"id": "1943059"}}},
+        "relationships": {"category": {"data": {"id": "9100002"}}},
     }]
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([_menu_day()])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([_menu_day()])
     )
     assert rep.created == 1 and rep.deleted == 0
 
@@ -288,8 +288,8 @@ def test_sync_ignores_other_childs_events():
 def test_dry_run_writes_nothing():
     api = FakeApi()
     rep = MenuRunReport()
-    MenuSync(api, "1982998", dry_run=True).sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([_menu_day()])
+    MenuSync(api, "1234567", dry_run=True).sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([_menu_day()])
     )
     assert rep.created == 1
     assert [c for c in api.calls if c[0] != "GET"] == []
@@ -299,7 +299,7 @@ def test_dry_run_writes_nothing():
 def test_unknown_category_raises_configerror():
     rep = MenuRunReport()
     with pytest.raises(ConfigError, match="not found"):
-        MenuSync(FakeApi(), "1982998").sync_child(
+        MenuSync(FakeApi(), "1234567").sync_child(
             "nobody", 389, "Nonexistent", [(2026, 9)], rep, client=_client_returning([_menu_day()])
         )
 
@@ -321,12 +321,12 @@ def test_last_day_is_not_duplicated_on_rerun():
                 "description": stamp(body, content_hash(summary, body)),
                 "starts_at": f"{d.date.isoformat()}T00:00:00.000-04:00",
             },
-            "relationships": {"category": {"data": {"id": "1943073"}}},
+            "relationships": {"category": {"data": {"id": "9100001"}}},
         })
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning(days)
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning(days)
     )
     assert (rep.created, rep.updated, rep.unchanged, rep.deleted) == (0, 0, 2, 0)
     assert [c for c in api.calls if c[0] in ("POST", "PUT", "DELETE")] == []
@@ -341,12 +341,12 @@ def test_duplicate_events_self_heal():
     ev = lambda i: {
         "id": f"dup{i}",
         "attributes": {"description": stamp(body, digest), "starts_at": "2026-09-01T00:00:00.000-04:00"},
-        "relationships": {"category": {"data": {"id": "1943073"}}},
+        "relationships": {"category": {"data": {"id": "9100001"}}},
     }
     api = FakeApi([ev(1), ev(2)])
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([day])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([day])
     )
     assert rep.deleted == 1 and rep.unchanged == 1 and rep.created == 0
     deletes = [c for c in api.calls if c[0] == "DELETE"]
@@ -359,12 +359,12 @@ def test_probe_day_beyond_window_is_never_deleted():
     existing = [{  # ours, but in the NEXT month's window — out of scope this run
         "id": "october",
         "attributes": {"description": stamp("x", "cccccccccccc"), "starts_at": "2026-10-01T00:00:00.000-04:00"},
-        "relationships": {"category": {"data": {"id": "1943073"}}},
+        "relationships": {"category": {"data": {"id": "9100001"}}},
     }]
     api = FakeApi(existing)
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([day])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([day])
     )
     assert rep.deleted == 0
     assert [c for c in api.calls if c[0] == "DELETE"] == []
@@ -373,7 +373,7 @@ def test_probe_day_beyond_window_is_never_deleted():
 def test_no_published_days_is_noop():
     api = FakeApi()
     rep = MenuRunReport()
-    MenuSync(api, "1982998").sync_child(
-        "madeline", 389, "Madeline", [(2026, 9)], rep, client=_client_returning([])
+    MenuSync(api, "1234567").sync_child(
+        "avery", 389, "Avery", [(2026, 9)], rep, client=_client_returning([])
     )
-    assert rep.skipped_children == ["madeline"] and api.calls == []
+    assert rep.skipped_children == ["avery"] and api.calls == []

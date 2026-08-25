@@ -1,6 +1,6 @@
 """FDMealPlanner client — school lunch menus.
 
-The district (Sudbury, accountId 71) publishes menus through FDMealPlanner
+Districts publish school lunch menus through FDMealPlanner
 (Whitsons Culinary Group). The **v1** data-locator API is public: no token, no
 login. (The newer v2 API requires a Bearer token; v1 returns the same menu data
 without one, so we use v1 deliberately.)
@@ -13,7 +13,7 @@ Item shape (fields we use):
     isEntreeType          1 = an entrée choice, 0 = side/drink/condiment
     sequenceNumber        display order
 
-NOTE: every item carries ``IsShowOnMenu=0`` for this district, so the filter
+NOTE: every item carries ``IsShowOnMenu=0`` in the menus observed, so the filter
 used by some other integrations would discard everything — we filter on
 ``isEntreeType`` instead.
 """
@@ -66,7 +66,7 @@ class DayMenu:
 
         Two very different menu styles exist in one district:
 
-        * elementary (Haynes) publishes ~3 rotating options a day, where
+        * elementary menus publish ~3 rotating options a day, where
           option 1 is *the* hot entrée — so show the first entrée;
         * middle school publishes ~19 always-available items plus 2-4 daily
           specials — so show the specials.

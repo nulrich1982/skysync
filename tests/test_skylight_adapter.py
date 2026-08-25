@@ -137,11 +137,11 @@ class TestAssigneeResolution:
         """A CONFIGURED mapping to a category with selected_for_chore_chart =
         False must raise ConfigError (chores there are invisible on the frame
         — observed live with a calendar category)."""
-        cal = make_category("400", "Ulrich Family")
+        cal = make_category("400", "Whole Family")
         cal.attributes.selected_for_chore_chart = False
         adapter = make_adapter(
             categories=[make_category("100", "Kayla"), cal],
-            child_categories={"family": "Ulrich Family"},
+            child_categories={"family": "Whole Family"},
         )
         with pytest.raises(ConfigError, match="chore chart"):
             adapter.supports(CanonicalTask(title="x", assignee="family"))

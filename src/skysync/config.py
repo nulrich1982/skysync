@@ -77,14 +77,14 @@ class MenuChild(BaseModel):
     """One child's school-lunch source -> Skylight profile."""
 
     location_id: int  # FDMealPlanner school id (389 elementary, 388 middle)
-    skylight_category: str  # profile label on the frame, e.g. "Madeline"
+    skylight_category: str  # profile label on the frame, e.g. "Avery"
 
 
 class MenuConfig(BaseModel):
     """School lunch menus -> all-day Skylight calendar events."""
 
     enabled: bool = False
-    account_id: int = 71  # FDMealPlanner district account (Sudbury)
+    account_id: int = 71  # FDMealPlanner district account id
     months_ahead: int = 1  # current month + this many ahead
     title_prefix: str = "\U0001f374 "  # fork & knife
     timezone: str = "America/New_York"

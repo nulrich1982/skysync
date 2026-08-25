@@ -5,7 +5,7 @@ Decisions, justifications, and known edges. Companion to `SETUP.md`.
 ## June 2026 revision: SharePoint master dropped (owner decision)
 
 The original brief made a SharePoint list the system of record. The owner
-keeps personal and work (markwellsvcs) domains separate, and personal
+keeps personal and work domains separate, and personal
 Microsoft accounts have no SharePoint — so the deployed configuration is
 **two-way To Do ⇄ Skylight with the local SQLite ledger as the system of
 record**. The engine was already side-generic; the SharePoint adapter remains

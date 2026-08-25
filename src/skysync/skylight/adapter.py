@@ -85,7 +85,7 @@ class SkylightTaskClient:
         self._lower_label_to_id = {c.attributes.label.lower(): c.id for c in cats}
         # Only chore-chart-enabled categories can hold visible chores; chores
         # created in others exist but never appear on the frame OR in the
-        # chores endpoint (observed live: 'Ulrich Family' calendar category).
+        # chores endpoint (observed live with a calendar-only category).
         # Absent flag (None) is given the benefit of the doubt.
         self._chartable = {
             c.id for c in cats if getattr(c.attributes, "selected_for_chore_chart", None) is not False
