@@ -24,6 +24,34 @@ from .sync import MenuRunReport, MenuSync, months_to_sync
 log = logging.getLogger("skysync.menu")
 
 
+def sync_menus(cfg, *, dry_run: bool = False, months_ahead: int | None = None) -> dict:
+    """Sync every configured child's lunch menu. Shared by the CLI and the
+    scheduled run in skysync.main."""
+    months = months_to_sync(
+        datetime.date.today(),
+        cfg.menu.months_ahead if months_ahead is None else months_ahead,
+    )
+    client = FDMealPlannerClient(account_id=cfg.menu.account_id)
+    store = SecretStore(cfg.resolve("secrets"))
+    api = SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers)
+    syncer = MenuSync(
+        api,
+        cfg.skylight.frame_id,
+        timezone=cfg.menu.timezone,
+        title_prefix=cfg.menu.title_prefix,
+        dry_run=dry_run,
+    )
+    report = MenuRunReport()
+    for child, mc in cfg.menu.children.items():
+        syncer.sync_child(
+            child, mc.location_id, mc.skylight_category, months, report, client=client
+        )
+    if dry_run:
+        for line in report.planned:
+            print("  [DRY-RUN]", line)
+    return report.summary()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="skysync.menu", description=__doc__)
     ap.add_argument("--config", default="config.toml")
@@ -68,29 +96,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {d.date}  {cfg.menu.title_prefix}{d.headline()}")
         return 0
 
-    store = SecretStore(cfg.resolve("secrets"))
-    api = SkylightApi(cfg.skylight.frame_id, store, extra_headers=cfg.skylight.headers)
-    syncer = MenuSync(
-        api,
-        cfg.skylight.frame_id,
-        timezone=cfg.menu.timezone,
-        title_prefix=cfg.menu.title_prefix,
-        dry_run=ns.dry_run,
-    )
-    report = MenuRunReport()
     try:
-        for child, mc in cfg.menu.children.items():
-            syncer.sync_child(
-                child, mc.location_id, mc.skylight_category, months, report, client=client
-            )
+        summary = sync_menus(cfg, dry_run=ns.dry_run, months_ahead=ns.months_ahead)
     except SkySyncError as exc:
         log.error("menu sync failed (%s): %s", type(exc).__name__, exc)
         return 1
 
-    if ns.dry_run:
-        for line in report.planned:
-            print("  [DRY-RUN]", line)
-    print(json.dumps(report.summary(), indent=2))
+    print(json.dumps(summary, indent=2))
     return 0
 
 

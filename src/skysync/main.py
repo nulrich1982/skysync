@@ -196,6 +196,42 @@ def cmd_login(cfg: AppConfig) -> int:
     return 0
 
 
+_MENU_LAST_RUN_KEY = "last_menu_sync_utc"
+
+
+def maybe_sync_menus(cfg: AppConfig, ledger: Ledger, min_interval_hours: int = 20) -> dict | None:
+    """Sync school lunch menus at most once a day.
+
+    Menus are published monthly, so there is no reason to hit the school's API
+    every 15 minutes with the task sync. We piggy-back on the existing
+    scheduled run (no second Task Scheduler entry, no extra stored password)
+    and throttle via the ledger's meta table.
+
+    A menu failure must never fail the task sync — it is logged and swallowed.
+    """
+    if not cfg.menu.enabled or not cfg.menu.children:
+        return None
+    now = datetime.now(timezone.utc)
+    last = ledger.meta_get(_MENU_LAST_RUN_KEY)
+    if last:
+        try:
+            if (now - datetime.fromisoformat(last)).total_seconds() < min_interval_hours * 3600:
+                return None  # already done today
+        except ValueError:
+            pass  # unparseable -> just run
+
+    try:
+        from .menu.cli import sync_menus
+
+        summary = sync_menus(cfg)
+        ledger.meta_set(_MENU_LAST_RUN_KEY, now.isoformat())
+        log.info("menu sync: %s", json.dumps(summary))
+        return summary
+    except Exception as exc:  # never break the task sync over a menu
+        log.error("menu sync failed (continuing): %s: %s", type(exc).__name__, exc)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def cmd_run(cfg: AppConfig, mode: str, fixture: str | None) -> int:
     state_dir = cfg.resolve(cfg.general.state_dir)
     started = time.monotonic()
@@ -234,12 +270,15 @@ def cmd_run(cfg: AppConfig, mode: str, fixture: str | None) -> int:
             grocery_ledger = Ledger(state_dir / "ledger-grocery.sqlite3")
 
     grocery_report: RunReport | None = None
+    menu_summary: dict | None = None
     try:
         with RunLock(state_dir):
             engine = SyncEngine(ledger, clients, build_policy(cfg))
             report: RunReport = engine.run()
             if grocery_clients is not None and grocery_ledger is not None:
                 grocery_report = SyncEngine(grocery_ledger, grocery_clients, grocery_policy(cfg)).run()
+            if mode == "live":
+                menu_summary = maybe_sync_menus(cfg, ledger)
     finally:
         ledger.close()
         if grocery_ledger is not None:
@@ -249,6 +288,8 @@ def cmd_run(cfg: AppConfig, mode: str, fixture: str | None) -> int:
     summary = {"mode": mode, "duration_s": duration, **report.summary()}
     if grocery_report is not None:
         summary["grocery"] = grocery_report.summary()
+    if menu_summary is not None:
+        summary["menu"] = menu_summary
     log.info("run complete: %s", json.dumps(summary, default=str))
 
     if mode == "live":

@@ -174,7 +174,8 @@
       "Bash(timeout 240 python -m pytest tests/test_engine.py tests/test_engine_twoway.py tests/test_ledger.py -q -o addopts=\"\" --color=no)",
       "Bash(timeout 240 python -m pytest tests/test_skylight_client.py tests/test_skylight_adapter.py tests/test_oauth.py tests/test_grocery_sync.py -q -o addopts=\"\" --color=no)",
       "Bash(timeout 240 python -m pytest tests/test_todo_client.py tests/test_sharepoint_client.py tests/test_mock_mode.py tests/test_secrets.py -q -o addopts=\"\" --color=no)",
-      "Bash(git commit -q -m 'School lunch menus -> Skylight: FDMealPlanner v1 \\(public, no auth\\) -> all-day calendar events per child *)"
+      "Bash(git commit -q -m 'School lunch menus -> Skylight: FDMealPlanner v1 \\(public, no auth\\) -> all-day calendar events per child *)",
+      "Bash(timeout 240 python -m pytest tests/test_engine.py tests/test_ledger.py -q -o addopts=\"\" --color=no)"
     ]
   }
 }
