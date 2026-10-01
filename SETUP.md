@@ -160,6 +160,23 @@ ignores overlapping starts, and exports `task\SkySync.xml`.
 DPAPI gotcha: if runs fail with `CryptUnprotectData failed`, the task is
 running as a different account than the one that seeded the secrets.
 
+### 7a. Menu month-end safety net
+
+The main task above already runs the lunch-menu sync once/day (throttled via
+the ledger), covering `[menu].months_ahead` months ahead. On top of that,
+
+```powershell
+.\register-menu-monthend-task.ps1
+```
+
+registers a second, independent task (`SkySync-MenuMonthEnd`) that fires once,
+at 21:00 on the **last day of every month from August through May** (no
+run in June/July), to make an extra attempt at importing next month's menu
+right at the boundary — even if the main task is disabled or hasn't been
+reinstalled. No password prompt: it uses your logged-on session rather than a
+stored credential, so if the PC is off at 21:00 that day it catches up at
+your next logon instead of skipping the month.
+
 ## 8. Monitoring (dead-man's switch)
 
 * `state\heartbeat.json` is rewritten **only after successful live runs**.
