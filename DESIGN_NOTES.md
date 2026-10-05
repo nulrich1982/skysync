@@ -227,6 +227,18 @@ synchronous workload, battle-tested, one fewer moving part.
 
 ## Objections / accepted risks
 * No objection to any hard constraint; all five implemented as specified.
+* **REVISED 2026-10-05**: "DPAPI-only secrets" relaxed on Linux only (host
+  moved from the Windows PC to an always-on Raspberry Pi, to stop syncing
+  depending on the PC being awake and logged on — see the Oct 1-5 scheduled-
+  task saga in session history). No Linux equivalent to DPAPI is available
+  headless on that Pi (no TPM, no Secret Service daemon). Chosen replacement,
+  discussed and picked over systemd-creds (not TPM-sealed on this Pi either,
+  so little real benefit for the added complexity): plain bytes on disk,
+  protected by filesystem permissions only (dir 700, files 600, owner-only),
+  matching the trust model that already protects this same Pi's other live
+  production secrets (`/opt/bot/secrets`, Microsoft Graph tokens for an
+  existing bot). Windows path (`sys.platform == "win32"`) is untouched —
+  same DPAPI code, byte-identical behavior. See `src/skysync/secrets.py`.
 * Accepted risks, by choice: Skylight ToS/drift (prominent in SETUP.md);
   winner-takes-all conflicts; the windowed-absence edge above; `--dry-run`
   plans against a copy of the ledger, so a dry run between two live runs can
