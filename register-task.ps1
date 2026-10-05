@@ -73,19 +73,32 @@ $Settings = New-ScheduledTaskSettingsSet `
 
 # Run whether logged on or not: needs the account password ONCE at
 # registration (stored by the Task Scheduler service, not by us).
+#
+# NOTE: this prompts right here in the console (Read-Host -AsSecureString),
+# not via Get-Credential's separate GUI dialog window. That dialog can spawn
+# without focus and be unreachable except via Alt+Tab in some terminal/
+# window-manager setups; a console prompt has no such window to lose.
 $User = "$env:USERDOMAIN\$env:USERNAME"
 Write-Host "Registering task '$TaskName' to run as $User (run whether logged on or not)."
-$cred = Get-Credential -UserName $User -Message "Password for $User (stored by Task Scheduler)"
+$securePwd = Read-Host -AsSecureString -Prompt "Password for $User (stored by Task Scheduler, not shown/logged)"
+$plainPwd = [Runtime.InteropServices.Marshal]::PtrToStringUni(
+    [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($securePwd))
 
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Action $Action `
-    -Trigger $Trigger `
-    -Settings $Settings `
-    -User $cred.UserName `
-    -Password $cred.GetNetworkCredential().Password `
-    -RunLevel Limited `
-    -Force | Out-Null
+try {
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Settings $Settings `
+        -User $User `
+        -Password $plainPwd `
+        -RunLevel Limited `
+        -Force | Out-Null
+} finally {
+    # Scrub the plaintext copy from memory as soon as we're done with it.
+    $plainPwd = $null
+    [GC]::Collect()
+}
 
 # CIM errors from Register-ScheduledTask don't always honor
 # ErrorActionPreference - verify the task actually exists before celebrating.
