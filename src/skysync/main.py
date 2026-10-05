@@ -184,7 +184,7 @@ class RunLock:
 
 def cmd_login(cfg: AppConfig) -> int:
     from .graph.auth import DelegatedGraphAuth
-    from .secrets import SecretStore
+    from .secrets import SecretStore, _BACKEND_LABEL
 
     auth = DelegatedGraphAuth(
         cfg.graph,
@@ -192,7 +192,7 @@ def cmd_login(cfg: AppConfig) -> int:
         include_sharepoint_scope=sharepoint_delegated(cfg),
     )
     user = auth.login_device_flow()
-    print(f"Logged in as {user}. The refresh token is cached (DPAPI) and will rotate on every run.")
+    print(f"Logged in as {user}. The refresh token is cached ({_BACKEND_LABEL}) and will rotate on every run.")
     return 0
 
 

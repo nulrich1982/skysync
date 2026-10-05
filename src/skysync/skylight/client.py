@@ -38,7 +38,7 @@ from .models_generated import (
 
 log = logging.getLogger(__name__)
 
-# DPAPI secret name for the password-mode session token minted from
+# Secret name for the password-mode session token minted from
 # /sessions. Reused across runs and auto-refreshed on a 401.
 _SESSION_SECRET = "skylight_session"
 
@@ -98,7 +98,7 @@ class SkylightApi:
 
         Priority:
           1. A user-captured ``skylight_token`` (token mode) — used verbatim.
-          2. Password mode: reuse a DPAPI-cached session token if present
+          2. Password mode: reuse a cached session token if present
              (``_SESSION_SECRET``), else log in once and cache the result.
         Caching the minted session token means we only hit /sessions when the
         token actually expires (a 401), not on every scheduled run — gentle on
@@ -139,7 +139,7 @@ class SkylightApi:
         return self._auth_header
 
     def _login(self) -> str:
-        """POST /sessions, cache the token (DPAPI), and return it.
+        """POST /sessions, cache the token, and return it.
 
         Raises AuthError on failure."""
         email = self._secrets.get("skylight_email")

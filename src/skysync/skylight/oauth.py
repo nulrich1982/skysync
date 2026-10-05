@@ -12,7 +12,8 @@ like the Microsoft Graph leg:
 
 Credit: the OAuth flow was reverse-engineered by andreabedini/skylight-cli.
 
-Secrets used (DPAPI):
+Secrets used (platform secret store — DPAPI on Windows, permissions-only
+files on Linux; see ``skysync.secrets``):
     skylight_refresh_token   rotating refresh token (the durable credential)
     skylight_access_token    cached 2-hour access token
     skylight_access_expiry   unix epoch (str) when the access token expires
@@ -33,7 +34,7 @@ import requests
 
 from ..errors import AuthError, PermanentApiError
 from ..retry import retry_call
-from ..secrets import SecretStore
+from ..secrets import SecretStore, _BACKEND_LABEL
 
 log = logging.getLogger(__name__)
 
@@ -251,7 +252,7 @@ def _main(argv: list[str] | None = None) -> int:
         email = store.get("skylight_email")
         password = store.get("skylight_password")
         initial_login(store, email, password, headers)
-        print("OK: Skylight OAuth login complete; refresh token stored (DPAPI).")
+        print(f"OK: Skylight OAuth login complete; refresh token stored ({_BACKEND_LABEL}).")
     elif ns.action == "refresh":
         tok = refresh_access_token(store, headers)
         print(f"OK: refreshed access token ({tok[:8]}...len {len(tok)}).")

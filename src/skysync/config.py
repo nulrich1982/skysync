@@ -1,8 +1,9 @@
 """Configuration: TOML file with NON-SECRET values only, validated by pydantic.
 
 Secrets (Skylight credentials, Graph client secret, token caches) live in the
-DPAPI store — see ``skysync.secrets``. Anything secret found in the config
-file is a hard error to stop the obvious mistake early.
+platform secret store (DPAPI on Windows, permissions-only files on Linux) —
+see ``skysync.secrets``. Anything secret found in the config file is a hard
+error to stop the obvious mistake early.
 """
 
 from __future__ import annotations
@@ -158,7 +159,7 @@ def _scan_for_secrets(raw: dict, path: str = "") -> None:
         elif any(bad in k.lower() for bad in FORBIDDEN_KEYS) and isinstance(v, str) and v:
             raise ConfigError(
                 f"config key '{where}' looks like a secret. Secrets must be seeded via "
-                f"'python -m skysync.secrets set <name>' (DPAPI), never stored in config.toml."
+                f"'python -m skysync.secrets set <name>', never stored in config.toml."
             )
 
 

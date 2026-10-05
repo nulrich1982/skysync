@@ -7,8 +7,9 @@ credentials) tokens are rejected for /me/todo. So this module:
   * authenticates interactively ONCE via device code (``skysync login``);
   * on every subsequent run calls ``acquire_token_silent`` — MSAL transparently
     redeems the refresh token, and refresh tokens are ROTATED by AAD, so we
-    persist the cache back to the DPAPI store after EVERY acquisition. Skipping
-    that persist is how unattended setups die weeks later; we never skip it.
+    persist the cache back to the platform secret store after EVERY
+    acquisition. Skipping that persist is how unattended setups die weeks
+    later; we never skip it.
 
 The SharePoint leg may run either on the same delegated token (default; scope
 ``Sites.ReadWrite.All`` added at login) or app-only via client credentials
@@ -16,7 +17,8 @@ The SharePoint leg may run either on the same delegated token (default; scope
 app-only. See DESIGN_NOTES.md for the trade-off.
 
 The token cache (which contains the refresh token) is itself a secret and is
-stored DPAPI-encrypted under the name ``msal_token_cache``.
+stored under the name ``msal_token_cache`` via the platform secret store
+(DPAPI on Windows, permissions-only files on Linux — see ``skysync.secrets``).
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ import requests
 from ..config import GraphConfig
 from ..errors import AuthError
 from ..retry import retry_call
-from ..secrets import SecretStore
+from ..secrets import SecretStore, _BACKEND_LABEL
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +47,8 @@ _CACHE_SECRET_NAME = "msal_token_cache"
 
 
 class DelegatedGraphAuth:
-    """Delegated (user) auth with DPAPI-persisted, rotation-safe token cache."""
+    """Delegated (user) auth with a rotation-safe token cache, persisted via
+    the platform secret store (DPAPI on Windows, permissions-only on Linux)."""
 
     def __init__(self, cfg: GraphConfig, store: SecretStore, include_sharepoint_scope: bool = False):
         self._store = store
@@ -85,7 +88,7 @@ class DelegatedGraphAuth:
         if "access_token" not in result:
             raise AuthError(f"login failed: {result.get('error_description', result)}")
         user = result.get("id_token_claims", {}).get("preferred_username", "<unknown>")
-        log.info("logged in as %s; token cache stored via DPAPI", user)
+        log.info("logged in as %s; token cache stored (%s)", user, _BACKEND_LABEL)
         return user
 
     def get_token(self) -> str:
