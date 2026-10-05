@@ -6,12 +6,24 @@
     Creates a Windows Task Scheduler job that runs
         python -m skysync.main run --live
     every N minutes (read from [schedule].interval_minutes in config.toml,
-    default 15), whether the user is logged on or not.
+    default 15).
 
-    IMPORTANT: run this script from an *elevated* PowerShell, as the SAME
-    Windows account that seeded the DPAPI secrets (python -m skysync.secrets
-    set ...) and performed 'python -m skysync.main login'. DPAPI blobs only
-    decrypt for that account, so the task must run as that account too.
+    IMPORTANT: run this script as the SAME Windows account that seeded the
+    DPAPI secrets (python -m skysync.secrets set ...) and performed
+    'python -m skysync.main login'. DPAPI blobs only decrypt for that
+    account, so the task must run as that account too.
+
+    By default this registers with LogonType=Interactive (no password
+    needed, no elevation needed): the task only fires while that account is
+    logged on (locked screen is fine; a full logoff/reboot pauses it until
+    next login), with -StartWhenAvailable so a missed window catches up at
+    login instead of being silently skipped. This is deliberate, not a
+    fallback: this account signs in via Windows Hello/PIN with no
+    traditional password set ("only allow Windows Hello sign-in for
+    Microsoft accounts" in Settings > Accounts > Sign-in options), so there
+    is no password for Task Scheduler's "run whether logged on or not" mode
+    to store - that mode needs the Microsoft account's online password,
+    which must be entered via -RunWhenLoggedOff below if you ever set one.
 
 .PARAMETER PythonExe
     Full path to python.exe. Defaults to the python on PATH.
@@ -19,14 +31,22 @@
 .PARAMETER TaskName
     Defaults to "SkySync".
 
+.PARAMETER RunWhenLoggedOff
+    Opt into the old "run whether logged on or not" mode, which stores the
+    account password (prompted here, in-console, not via a GUI dialog) and
+    needs an *elevated* PowerShell. Only useful if this account has (or
+    gets) a traditional password - see DESCRIPTION.
+
 .EXAMPLE
     .\register-task.ps1
     .\register-task.ps1 -PythonExe "C:\Python313\python.exe"
+    .\register-task.ps1 -RunWhenLoggedOff
 #>
 [CmdletBinding()]
 param(
     [string]$PythonExe = "",
-    [string]$TaskName = "SkySync"
+    [string]$TaskName = "SkySync",
+    [switch]$RunWhenLoggedOff
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,33 +91,47 @@ $Settings = New-ScheduledTaskSettingsSet `
     -RestartCount 0 `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-# Run whether logged on or not: needs the account password ONCE at
-# registration (stored by the Task Scheduler service, not by us).
-#
-# NOTE: this prompts right here in the console (Read-Host -AsSecureString),
-# not via Get-Credential's separate GUI dialog window. That dialog can spawn
-# without focus and be unreachable except via Alt+Tab in some terminal/
-# window-manager setups; a console prompt has no such window to lose.
 $User = "$env:USERDOMAIN\$env:USERNAME"
-Write-Host "Registering task '$TaskName' to run as $User (run whether logged on or not)."
-$securePwd = Read-Host -AsSecureString -Prompt "Password for $User (stored by Task Scheduler, not shown/logged)"
-$plainPwd = [Runtime.InteropServices.Marshal]::PtrToStringUni(
-    [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($securePwd))
 
-try {
+if ($RunWhenLoggedOff) {
+    # Needs the account password ONCE at registration (stored by the Task
+    # Scheduler service, not by us). Prompted here, in-console
+    # (Read-Host -AsSecureString), not via Get-Credential's separate GUI
+    # dialog window - that dialog can spawn without focus and become
+    # unreachable except via Alt+Tab in some terminal/window-manager setups.
+    Write-Host "Registering task '$TaskName' to run as $User (run whether logged on or not)."
+    $securePwd = Read-Host -AsSecureString -Prompt "Password for $User (stored by Task Scheduler, not shown/logged)"
+    $plainPwd = [Runtime.InteropServices.Marshal]::PtrToStringUni(
+        [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($securePwd))
+
+    try {
+        Register-ScheduledTask `
+            -TaskName $TaskName `
+            -Action $Action `
+            -Trigger $Trigger `
+            -Settings $Settings `
+            -User $User `
+            -Password $plainPwd `
+            -RunLevel Limited `
+            -Force | Out-Null
+    } finally {
+        # Scrub the plaintext copy from memory as soon as we're done with it.
+        $plainPwd = $null
+        [GC]::Collect()
+    }
+} else {
+    # No password: fires only while $User is logged on (locked screen is
+    # fine), -StartWhenAvailable catches up at next login if a window was
+    # missed. No elevation needed either.
+    Write-Host "Registering task '$TaskName' to run as $User (while logged on; no password needed)."
+    $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $Action `
         -Trigger $Trigger `
         -Settings $Settings `
-        -User $User `
-        -Password $plainPwd `
-        -RunLevel Limited `
+        -Principal $principal `
         -Force | Out-Null
-} finally {
-    # Scrub the plaintext copy from memory as soon as we're done with it.
-    $plainPwd = $null
-    [GC]::Collect()
 }
 
 # CIM errors from Register-ScheduledTask don't always honor
@@ -106,7 +140,8 @@ if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) 
     throw "Task '$TaskName' was NOT registered - see the error above."
 }
 
-Write-Host "Registered. First run in ~1 minute. Useful commands:"
+$mode = if ($RunWhenLoggedOff) { "whether logged on or not" } else { "while logged on; will catch up at next login if $User wasn't signed in" }
+Write-Host "Registered ($mode). First run in ~1 minute. Useful commands:"
 Write-Host "  Start-ScheduledTask  -TaskName $TaskName        # run now"
 Write-Host "  Get-ScheduledTaskInfo -TaskName $TaskName       # last result"
 Write-Host "  python -m skysync.main --config config.toml status"

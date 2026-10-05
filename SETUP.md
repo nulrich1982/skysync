@@ -144,18 +144,26 @@ python -m skysync.main --config config.toml status
 Then check the Skylight frame — your To Do tasks should appear under the
 right kids.
 
-## 7. Task Scheduler install (runs whether logged on or not)
+## 7. Task Scheduler install
 
-From an **elevated** PowerShell, as the secret-seeding account:
+As the secret-seeding account:
 
 ```powershell
 .\register-task.ps1
 ```
 
 It reads the cadence from `[schedule].interval_minutes` (default 15), creates
-the task with **Run whether user is logged on or not** (you'll be prompted
-once for the account password — Task Scheduler stores it, not SkySync),
-ignores overlapping starts, and exports `task\SkySync.xml`.
+the task, ignores overlapping starts, and exports `task\SkySync.xml`.
+
+By default this registers to run **while the account is logged on** (locked
+screen is fine; a full logoff/reboot pauses it until next login, then
+`StartWhenAvailable` catches it up) — no password, no elevation needed. If
+your account signs in via Windows Hello/PIN with no traditional password set
+(Settings > Accounts > Sign-in options), this is the only option that works:
+"run whether logged on or not" needs a password to store, and there isn't
+one. If your account *does* have a password and you want true logged-off
+operation, use `.\register-task.ps1 -RunWhenLoggedOff` from an **elevated**
+PowerShell — prompts once for the password in-console.
 
 DPAPI gotcha: if runs fail with `CryptUnprotectData failed`, the task is
 running as a different account than the one that seeded the secrets.
