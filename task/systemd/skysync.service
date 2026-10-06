@@ -1,0 +1,16 @@
+[Unit]
+Description=SkySync: two-way Microsoft To Do <-> Skylight Calendar sync
+Documentation=file:/opt/skysync/repo/SETUP.md
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/mnt/vault
+OnFailure=digest-alert@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/skysync/repo
+ExecStart=/opt/skysync/venv/bin/python -m skysync.main --config /opt/skysync/config.toml run --live
+TimeoutStartSec=5min
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=skysync

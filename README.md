@@ -10,16 +10,18 @@ Self-hosted two-way task sync for a household, on a personal Microsoft account:
 
 A task created/edited/completed/deleted in either source propagates to the
 other — assigned to the right family member on the Skylight frame — with no
-duplicates and no sync loops, driven by Windows Task Scheduler every 15 min.
-(An optional SharePoint-list master for work/school tenants is supported; see
-the SETUP.md appendix.)
+duplicates and no sync loops, running every 15 min via systemd timers on an
+always-on Raspberry Pi (`clawdpi`). (An optional SharePoint-list master for
+work/school tenants is supported; see the SETUP.md appendix.)
 
 > ⚠️ The Skylight API is **unofficial**: it may break without notice and its
 > use may conflict with Skylight's Terms of Service. See `SETUP.md`.
 
-* **[SETUP.md](SETUP.md)** — Azure app registration, SharePoint list schema,
-  Skylight frameId capture, secret seeding (DPAPI), first-run auth, Task
-  Scheduler install, monitoring.
+* **[PI_DEPLOY.md](PI_DEPLOY.md)** — the actual production deployment:
+  layout, secrets model, systemd timers, backup, redeploy steps.
+* **[SETUP.md](SETUP.md)** — Windows/Task Scheduler setup (kept for
+  reference; not the active deployment). Azure app registration, SharePoint
+  list schema, Skylight frameId capture, secret seeding, first-run auth.
 * **[DESIGN_NOTES.md](DESIGN_NOTES.md)** — architecture, constraint
   decisions, conflict/delete semantics, accepted edges.
 

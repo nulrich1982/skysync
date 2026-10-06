@@ -1,0 +1,10 @@
+[Unit]
+Description=Run SkySync month-end menu safety net (last day of month, Aug-May, 21:00)
+
+[Timer]
+OnCalendar=*-01,02,03,04,05,08,09,10,11,12~01 21:00:00
+AccuracySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

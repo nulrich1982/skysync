@@ -1,0 +1,10 @@
+[Unit]
+Description=Run SkySync every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+AccuracySec=30sec
+Persistent=true
+
+[Install]
+WantedBy=timers.target
