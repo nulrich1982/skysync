@@ -127,9 +127,14 @@ automatically.
 
 ## Decommissioning the Windows side
 
-Both Windows scheduled tasks (`SkySync`, `SkySync-MenuMonthEnd`) were
-disabled, not deleted, during the cutover — `Enable-ScheduledTask` brings
-either back if the Pi ever needs to be taken down for maintenance. Running
-both simultaneously against the same remote accounts with *separate* local
-ledgers would cause duplicate/conflicting writes, so **never re-enable the
-Windows tasks while the Pi's timers are also active.**
+Both Windows scheduled tasks were disabled during the cutover, then deleted
+(`SkySync` once the Pi's `skysync.timer` had two consecutive clean runs
+confirmed via `journalctl`; `SkySync-MenuMonthEnd` once `skysync-menu-
+monthend.timer` was confirmed `enabled` on the Pi with the correct next
+fire date). Windows no longer has any SkySync task at all — the Pi is the
+only host running this now. If the Pi is ever taken down for maintenance
+and Windows needs to cover temporarily, re-run `register-task.ps1` (and
+`register-menu-monthend-task.ps1`) there rather than assuming a disabled
+task is still around to re-enable; just make sure only one host is running
+against the same accounts at a time, since separate local ledgers would
+cause duplicate/conflicting writes.
